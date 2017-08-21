@@ -21,6 +21,10 @@ class QtPopupLineEditWidget(QtWidgets.QLineEdit):
         else:
             self.nodeCreator = nodeCreator
         self.returnPressed.connect(self.onReturnPressedSlot)
+        #hide by default
+        self.hide()
+        self.clear()
+        self.parentWidget().setFocus()
 
     def popup(self):
         position = self.parentWidget().mapFromGlobal(QtGui.QCursor.pos())
