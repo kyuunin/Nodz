@@ -810,14 +810,14 @@ class Nodz(QtWidgets.QGraphicsView):
             while(doNextGraphLevel):
                 doNextGraphLevel = False
                 for nodeI in range(len(rootGraph[currentGraphLevel])):
-                    node = rootGraph[currentGraphLevel][nodeI]
-                    for attr in node.attrs:
-                        if attr in node.sockets:
-                            socket = node.sockets[attr]
+                    currentNode = rootGraph[currentGraphLevel][nodeI]
+                    for attr in currentNode.attrs:
+                        if attr in currentNode.sockets:
+                            socket = currentNode.sockets[attr]
                             for connection in socket.connections:
-                                node = connection.plugItem.parentItem()
-                                if (node not in alreadyVisitedNodes):
-                                    alreadyVisitedNodes.append(node)
+                                connectedNode = connection.plugItem.parentItem()
+                                if (connectedNode not in alreadyVisitedNodes):
+                                    alreadyVisitedNodes.append(connectedNode)
 
                                     if len(rootGraph)<=(currentGraphLevel+1):
                                         emptyArray = []
