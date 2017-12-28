@@ -98,9 +98,9 @@ class Nodz(QtWidgets.QGraphicsView):
         if (event.button() == QtCore.Qt.RightButton and
             event.modifiers() == QtCore.Qt.AltModifier):
             self.currentState = 'ZOOM_VIEW'
+            self.initMousePos = event.pos()
             self.zoomInitialPos = event.pos()
             self.initMouse = QtGui.QCursor.pos()
-            self.initMousePos = event.pos()
             self.setInteractive(False)
 
 
@@ -990,6 +990,22 @@ class Nodz(QtWidgets.QGraphicsView):
         self.signal_GraphLoaded.emit()
 
     def createConnection(self, sourceNode, sourceAttr, targetNode, targetAttr):
+        """
+        Create a manual connection.
+
+        :type  sourceNode: str.
+        :param sourceNode: Node that emits the connection.
+
+        :type  sourceAttr: str.
+        :param sourceAttr: Attribute that emits the connection.
+
+        :type  targetNode: str.
+        :param targetNode: Node that receives the connection.
+
+        :type  targetAttr: str.
+        :param targetAttr: Attribute that receives the connection.
+
+        """
         plug = self.scene().nodes[sourceNode].plugs[sourceAttr]
         socket = self.scene().nodes[targetNode].sockets[targetAttr]
 
@@ -1006,6 +1022,8 @@ class Nodz(QtWidgets.QGraphicsView):
         connection.updatePath()
 
         self.scene().addItem(connection)
+
+        return connection
 
     def evaluateGraph(self):
         """
