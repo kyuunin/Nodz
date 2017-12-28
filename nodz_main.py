@@ -98,9 +98,9 @@ class Nodz(QtWidgets.QGraphicsView):
         if (event.button() == QtCore.Qt.RightButton and
             event.modifiers() == QtCore.Qt.AltModifier):
             self.currentState = 'ZOOM_VIEW'
+            self.initMousePos = event.pos()
             self.zoomInitialPos = event.pos()
             self.initMouse = QtGui.QCursor.pos()
-            self.initMousePos = event.pos()
             self.setInteractive(False)
 
 
@@ -853,6 +853,30 @@ class Nodz(QtWidgets.QGraphicsView):
                     if (node not in alreadyVisitedNodes) and (node.name in nodes):
                         alreadyVisitedNodes.append(node)
                         node_pos = QtCore.QPointF(currentXpos, currentYpos)
+                        #check scene dimensions
+                        shouldResize = False
+                        sceneRect = self.scene().sceneRect()
+                        if node_pos.x() < nodeWidth :
+                            sceneRect.setWidth(self.scene().width() - node_pos.x() + nodeWidth + margin)
+                            node_pos.setX(nodeWidth + margin)
+                            shouldResize = True
+                        if node_pos.x() + nodeWidth > self.scene().width():
+                            sceneRect.setWidth(node_pos.x() + nodeWidth + margin)
+                            shouldResize = True
+                        if node_pos.y() < node.height : 
+                            sceneRect.setHeight(self.scene().height() - node_pos.y() + node.height + margin)
+                            node_pos.setY(node.height + margin)
+                            shouldResize = True
+                        if node_pos.y() + node.height > self.scene().height():
+                            sceneRect.setHeight(node_pos.y() + node.height + margin)
+                            shouldResize = True
+
+                        if shouldResize:
+                            self.scene().setSceneRect(sceneRect)
+
+                        if node_pos.x() < 0 or node_pos.x() > self.scene().width() or node_pos.y()<0 or node_pos.y() > self.scene().height():
+                            print "Warning: {0}: Invalid node position : ({1} ; {2}), frame dimension: ({3} ; {4}).".format(node.name, node_pos.x(), node_pos.y(), self.scene().width(), self.scene().height())
+                            
                         node.setPos(node_pos)
 
                     currentYpos += node.height + margin
@@ -990,6 +1014,22 @@ class Nodz(QtWidgets.QGraphicsView):
         self.signal_GraphLoaded.emit()
 
     def createConnection(self, sourceNode, sourceAttr, targetNode, targetAttr):
+        """
+        Create a manual connection.
+
+        :type  sourceNode: str.
+        :param sourceNode: Node that emits the connection.
+
+        :type  sourceAttr: str.
+        :param sourceAttr: Attribute that emits the connection.
+
+        :type  targetNode: str.
+        :param targetNode: Node that receives the connection.
+
+        :type  targetAttr: str.
+        :param targetAttr: Attribute that receives the connection.
+
+        """
         plug = self.scene().nodes[sourceNode].plugs[sourceAttr]
         socket = self.scene().nodes[targetNode].sockets[targetAttr]
 
@@ -1006,6 +1046,8 @@ class Nodz(QtWidgets.QGraphicsView):
         connection.updatePath()
 
         self.scene().addItem(connection)
+
+        return connection
 
     def evaluateGraph(self):
         """
