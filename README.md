@@ -111,6 +111,7 @@ signal_NodeCreated(nodeName)
 signal_NodeDeleted([nodeNames])
 signal_NodeEdited(oldName, newName)
 signal_NodeSelected([nodeNames])
+signal_NodeMoved(nodeName, nodePos)
 ```
 Attributes
 ```Python
