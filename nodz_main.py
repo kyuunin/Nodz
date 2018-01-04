@@ -881,6 +881,8 @@ class Nodz(QtWidgets.QGraphicsView):
                             print "Warning: {0}: Invalid node position : ({1} ; {2}), frame dimension: ({3} ; {4}).".format(node.name, node_pos.x(), node_pos.y(), self.scene().width(), self.scene().height())
                             
                         node.setPos(node_pos)
+                        # Emit signal.
+                        self.signal_NodeMoved.emit(node.name, node.pos())
 
                     currentYpos += node.height + margin
                     nextBaseYpos = max(nextBaseYpos, currentYpos)
