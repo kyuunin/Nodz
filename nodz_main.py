@@ -1202,7 +1202,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
         """
         super(NodeItem, self).__init__()
 
-        self.setZValue(1)
+        self.baseZValue = 1
+        self.setZValue(self.baseZValue)
 
         # Storage
         self.name = name
@@ -1544,15 +1545,17 @@ class NodeItem(QtWidgets.QGraphicsItem):
         Keep the selected node on top of the others.
 
         """
+        maxZValue = 0
         nodes = self.scene().nodes
         for node in nodes.values():
-            node.setZValue(1)
+            node.setZValue(node.baseZValue)
+            maxZValue = max(maxZValue, node.baseZValue)
 
         for item in self.scene().items():
             if isinstance(item, ConnectionItem):
                 item.setZValue(1)
 
-        self.setZValue(2)
+        self.setZValue(maxZValue+1)
 
         super(NodeItem, self).mousePressEvent(event)
 
@@ -1580,12 +1583,13 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
     def mouseReleaseEvent(self, event):
         """
-        .
+        Emit signal_NodeMoved signal.
 
         """
-        # Emit node moved signal.
-        self.scene().signal_NodeMoved.emit(self.name, self.pos())
         super(NodeItem, self).mouseReleaseEvent(event)
+
+        self.scene().signal_NodeMoved.emit(self.name, self.pos())
+        self.setZValue(self.baseZValue)
 
     def hoverLeaveEvent(self, event):
         """
