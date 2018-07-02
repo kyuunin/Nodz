@@ -1122,6 +1122,7 @@ class NodeScene(QtWidgets.QGraphicsScene):
 
         # Nodes storage.
         self.nodes = dict()
+        self.userData = None        #handled by user, won't be read nor written by Nodz
 
     def dragEnterEvent(self, event):
         """
@@ -1227,6 +1228,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.attrsData = dict()
         self.attrCount = 0
         self.currentDataType = None
+        self.userData = None        #handled by user, won't be read nor written by Nodz
 
         self.plugs = dict()
         self.sockets = dict()
