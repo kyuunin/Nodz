@@ -2,9 +2,9 @@ import os
 import re
 import json
 
-from Qt import QtGui, QtCore, QtWidgets
+from glm.Qtpy.Qt import QtGui, QtCore, QtWidgets
 import nodz_utils as utils
-
+import nodz_extra
 
 
 defaultConfigPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'default_config.json')
@@ -69,6 +69,9 @@ class Nodz(QtWidgets.QGraphicsView):
         # Display options.
         self.currentState = 'DEFAULT'
         self.pressedKeys = list()
+
+        # Node creation helper
+        self.nodeCreationPopup = None
 
     def wheelEvent(self, event):
         """
@@ -302,6 +305,12 @@ class Nodz(QtWidgets.QGraphicsView):
         if event.key() == QtCore.Qt.Key_S:
             self._nodeSnap = True
 
+        if event.key() == QtCore.Qt.Key_Tab:
+            self.nodeCreationPopup.popup()
+
+        if event.key() == QtCore.Qt.Key_Escape:
+            self.nodeCreationPopup.popdown()
+
         # Emit signal.
         self.signal_KeyPressed.emit(event.key())
 
@@ -406,7 +415,8 @@ class Nodz(QtWidgets.QGraphicsView):
         """
         selected_nodes = list()
         for node in self.scene().selectedItems():
-            selected_nodes.append(node.name)
+            if type(node) is NodeItem:
+                selected_nodes.append(node.name)
             node._remove()
 
         # Emit signal.
@@ -417,13 +427,14 @@ class Nodz(QtWidgets.QGraphicsView):
         Wrapper to return selected items.
 
         """
-        selected_nodes = list()
+        self.selectedNodes = list()
         if self.scene().selectedItems():
             for node in self.scene().selectedItems():
-                selected_nodes.append(node.name)
+                if type(node) is NodeItem:
+                    self.selectedNodes.append(node.name)
 
         # Emit signal.
-        self.signal_NodeSelected.emit(selected_nodes)
+        self.signal_NodeSelected.emit(self.selectedNodes)
 
 
     ##################################################################
@@ -476,6 +487,15 @@ class Nodz(QtWidgets.QGraphicsView):
         # Connect signals.
         self.scene().selectionChanged.connect(self._returnSelection)
 
+    def initNodeCreationHelper(self, completerNodeList=[], nodeCreatorCallback=None):
+        """
+        Setup the node's creation helper that is available from the tab key
+
+        """
+        self.nodeCreationPopup = nodz_extra.QtPopupLineEditWidget(self.scene().views()[0])
+        self.nodeCreationPopup.setNodesList(completerNodeList)
+        if nodeCreatorCallback is not None:
+            self.nodeCreationPopup.nodeCreator = nodeCreatorCallback
 
     # NODES
     def createNode(self, name='default', preset='node_default', position=None, alternate=True):
@@ -765,6 +785,120 @@ class Nodz(QtWidgets.QGraphicsView):
 
 
     # GRAPH
+    def autoLayoutGraph(self, nodes = None, margin = 50):
+        """
+        Auto set nodes positions in the graph according to their connections.
+
+        """
+
+        nodeWidth = 300    #default value, will be replaced by node.baseWidth + margin when iterating on the first node
+        sceneNodes = self.scene().nodes.keys()
+        if (nodes is None) or len(nodes)==0:
+            nodes = sceneNodes
+        rootNodes = []
+        alreadyVisitedNodes = []
+
+        # root nodes (without connection on the plug)
+        for nodeName in sceneNodes:
+            node = self.scene().nodes[nodeName]
+            if node is not None:
+                nodeWidth = node.baseWidth + margin
+                connectionCount=0
+                isRoot = True
+                for plug in node.plugs.values():
+                    isRoot &= (len(plug.connections)==0)
+                if isRoot:
+                    rootNodes.append(node)
+        
+        maxGraphWidth = 0
+        rootGraphs = [[[0 for x in range(0)] for y in range(0)] for z in range(0)]
+        for rootNode in rootNodes:
+            rootGraph = [[0 for x in range(0)] for y in range(0)]
+            rootGraph.append([rootNode])
+            
+            currentGraphLevel = 0
+            doNextGraphLevel = True
+            while(doNextGraphLevel):
+                doNextGraphLevel = False
+                for nodeI in range(len(rootGraph[currentGraphLevel])):
+                    currentNode = rootGraph[currentGraphLevel][nodeI]
+                    for attr in currentNode.attrs:
+                        if attr in currentNode.sockets:
+                            socket = currentNode.sockets[attr]
+                            for connection in socket.connections:
+                                connectedNode = connection.plugItem.parentItem()
+                                if (connectedNode not in alreadyVisitedNodes):
+                                    alreadyVisitedNodes.append(connectedNode)
+
+                                    if len(rootGraph)<=(currentGraphLevel+1):
+                                        emptyArray = []
+                                        rootGraph.append(emptyArray)
+                                    rootGraph[currentGraphLevel+1].append(connection.plugItem.parentItem())
+                                    doNextGraphLevel = True
+                currentGraphLevel+=1
+
+            graphWidth = len(rootGraph) * (nodeWidth+margin)
+            maxGraphWidth = max(graphWidth, maxGraphWidth)
+            rootGraphs.append(rootGraph)
+
+        #update scene rect if needed
+        if maxGraphWidth > self.scene().width():
+            sceneRect = self.scene().sceneRect()
+            sceneRect.setWidth(maxGraphWidth)
+            self.scene().setSceneRect(sceneRect)
+
+        alreadyVisitedNodes = []
+        baseYpos = margin
+        for rootGraph in rootGraphs:
+            #set positions...
+            currentXpos = max(0, 0.5*(self.scene().width()-maxGraphWidth)) + maxGraphWidth-nodeWidth  #middle of the view
+            nextBaseYpos = baseYpos
+            for nodesAtLevel in rootGraph:
+                currentYpos = baseYpos
+                for node in nodesAtLevel:
+                    if len(node.plugs)>0:
+                        if len(node.plugs.values()[0].connections)>0:
+                            parentPosition = node.plugs.values()[0].connections[0].socketItem.parentItem().pos()
+                            currentXpos = parentPosition.x() - nodeWidth
+                            #currentYpos = parentPosition.y()
+                    if (node not in alreadyVisitedNodes) and (node.name in nodes):
+                        alreadyVisitedNodes.append(node)
+                        node_pos = QtCore.QPointF(currentXpos, currentYpos)
+                        #check scene dimensions
+                        shouldResize = False
+                        sceneRect = self.scene().sceneRect()
+                        if node_pos.x() < nodeWidth :
+                            sceneRect.setWidth(self.scene().width() - node_pos.x() + nodeWidth + margin)
+                            node_pos.setX(nodeWidth + margin)
+                            shouldResize = True
+                        if node_pos.x() + nodeWidth > self.scene().width():
+                            sceneRect.setWidth(node_pos.x() + nodeWidth + margin)
+                            shouldResize = True
+                        if node_pos.y() < node.height : 
+                            sceneRect.setHeight(self.scene().height() - node_pos.y() + node.height + margin)
+                            node_pos.setY(node.height + margin)
+                            shouldResize = True
+                        if node_pos.y() + node.height > self.scene().height():
+                            sceneRect.setHeight(node_pos.y() + node.height + margin)
+                            shouldResize = True
+
+                        if shouldResize:
+                            self.scene().setSceneRect(sceneRect)
+
+                        if node_pos.x() < 0 or node_pos.x() > self.scene().width() or node_pos.y()<0 or node_pos.y() > self.scene().height():
+                            print "Warning: {0}: Invalid node position : ({1} ; {2}), frame dimension: ({3} ; {4}).".format(node.name, node_pos.x(), node_pos.y(), self.scene().width(), self.scene().height())
+                            
+                        node.setPos(node_pos)
+                        # Emit signal.
+                        self.signal_NodeMoved.emit(node.name, node.pos())
+
+                    currentYpos += node.height + margin
+                    nextBaseYpos = max(nextBaseYpos, currentYpos)
+                currentXpos -= nodeWidth
+            baseYpos = nextBaseYpos
+
+        self.scene().updateScene()
+
     def saveGraph(self, filePath='path'):
         """
         Get all the current graph infos and store them in a .json file
@@ -990,6 +1124,7 @@ class NodeScene(QtWidgets.QGraphicsScene):
 
         # Nodes storage.
         self.nodes = dict()
+        self.userData = None        #handled by user, won't be read nor written by Nodz
 
     def dragEnterEvent(self, event):
         """
@@ -1081,7 +1216,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
         """
         super(NodeItem, self).__init__()
 
-        self.setZValue(1)
+        self.baseZValue = 1
+        self.setZValue(self.baseZValue)
 
         # Storage
         self.name = name
@@ -1094,6 +1230,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.attrsData = dict()
         self.attrCount = 0
         self.currentDataType = None
+        self.userData = None        #handled by user, won't be read nor written by Nodz
 
         self.plugs = dict()
         self.sockets = dict()
@@ -1428,15 +1565,17 @@ class NodeItem(QtWidgets.QGraphicsItem):
         Keep the selected node on top of the others.
 
         """
+        maxZValue = 0
         nodes = self.scene().nodes
         for node in nodes.values():
-            node.setZValue(1)
+            node.setZValue(node.baseZValue)
+            maxZValue = max(maxZValue, node.baseZValue)
 
         for item in self.scene().items():
             if isinstance(item, ConnectionItem):
                 item.setZValue(1)
 
-        self.setZValue(2)
+        self.setZValue(maxZValue+1)
 
         super(NodeItem, self).mousePressEvent(event)
 
@@ -1472,7 +1611,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
     def mouseReleaseEvent(self, event):
         """
-        .
+        Emit signal_NodeMoved signal.
 
         """
         # Emit node moved signal.
@@ -1945,6 +2084,7 @@ class ConnectionItem(QtWidgets.QGraphicsPathItem):
         super(ConnectionItem, self).__init__()
 
         self.setZValue(1)
+        self.lastSelected = False
 
         # Storage.
         self.socketNode = None
@@ -1967,6 +2107,30 @@ class ConnectionItem(QtWidgets.QGraphicsPathItem):
         # Methods.
         self._createStyle()
 
+    @property
+    def pen(self):
+        """
+        Return the pen based on the selection state of the node.
+
+        """
+        if self.isSelected():
+            return self._penSel
+        else:
+            return self._pen
+
+    def paint(self, painter, option, widget):
+        """
+        Paint the node and attributes.
+
+        """
+        #handle selection change...
+        isSelected = self.isSelected()
+        if self.lastSelected != isSelected:
+            self.updatePath()
+            self.lastSelected = isSelected
+
+        super(ConnectionItem, self).paint(painter, option, widget)
+
     def _createStyle(self):
         """
         Read the connection style from the configuration file.
@@ -1978,6 +2142,12 @@ class ConnectionItem(QtWidgets.QGraphicsPathItem):
 
         self._pen = QtGui.QPen(utils._convertDataToColor(config['connection_color']))
         self._pen.setWidth(config['connection_width'])
+        
+        #make link selectable + selection style
+        self._penSel = QtGui.QPen(utils._convertDataToColor(config['connection_sel_color']))
+        self._penSel.setWidth(config['connection_sel_width'])
+
+        self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
 
     def _outputConnectionData(self):
         """
@@ -1989,7 +2159,7 @@ class ConnectionItem(QtWidgets.QGraphicsPathItem):
 
     def mousePressEvent(self, event):
         """
-        Snap the Connection to the mouse.
+        Make connection in front of other items
 
         """
         nodzInst = self.scene().views()[0]
@@ -1998,24 +2168,7 @@ class ConnectionItem(QtWidgets.QGraphicsPathItem):
             if isinstance(item, ConnectionItem):
                 item.setZValue(0)
 
-        nodzInst.drawingConnection = True
-
-        d_to_target = (event.pos() - self.target_point).manhattanLength()
-        d_to_source = (event.pos() - self.source_point).manhattanLength()
-        if d_to_target < d_to_source:
-            self.target_point = event.pos()
-            self.movable_point = 'target_point'
-            self.target.disconnect(self)
-            self.target = None
-            nodzInst.sourceSlot = self.source
-        else:
-            self.source_point = event.pos()
-            self.movable_point = 'source_point'
-            self.source.disconnect(self)
-            self.source = None
-            nodzInst.sourceSlot = self.target
-
-        self.updatePath()
+        super(ConnectionItem, self).mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         """
@@ -2049,7 +2202,7 @@ class ConnectionItem(QtWidgets.QGraphicsPathItem):
 
     def mouseReleaseEvent(self, event):
         """
-        Create a Connection if possible, otherwise delete it.
+        Create a Connection if possible, otherwise do nothing.
 
         """
         nodzInst = self.scene().views()[0]
@@ -2058,7 +2211,6 @@ class ConnectionItem(QtWidgets.QGraphicsPathItem):
         slot = self.scene().itemAt(event.scenePos().toPoint(), QtGui.QTransform())
 
         if not isinstance(slot, SlotItem):
-            self._remove()
             self.updatePath()
             super(ConnectionItem, self).mouseReleaseEvent(event)
             return
@@ -2112,7 +2264,7 @@ class ConnectionItem(QtWidgets.QGraphicsPathItem):
         Update the path.
 
         """
-        self.setPen(self._pen)
+        self.setPen(self.pen)
 
         path = QtGui.QPainterPath()
         path.moveTo(self.source_point)

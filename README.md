@@ -55,6 +55,7 @@ nodz.gridSnapToggle = False
 del : delete the selected nodes
 f   : zoom focus on selected items, all the items if nothing is selected
 s   : snap the selected node on the grid
+tab : display the node creator helper
 
 ```
 
@@ -77,6 +78,7 @@ Nodes
 def createNode(name, preset, position, alternate)
 def deleteNode(node)
 def editNode(node, newName)
+def initNodeCreationHelper(nodeList, nodeCreatorFunction)
 ```
 Attributes
 ```python
@@ -90,6 +92,7 @@ def createConnection(sourceNode, sourceAttr, targetNode, targetAttr)
 ```
 Graph
 ```python
+def autoLayoutGraph(margin)
 def saveGraph(filePath)
 def loadGraph(filePath)
 def evaluateGraph()

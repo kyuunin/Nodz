@@ -90,6 +90,10 @@ def on_graphEvaluated():
 def on_keyPressed(key):
     print 'key pressed : ', key
 
+    if key==76:  #l
+        nodz.autoLayoutGraph(nodz.selectedNodes)
+
+
 nodz.signal_NodeCreated.connect(on_nodeCreated)
 nodz.signal_NodeDeleted.connect(on_nodeDeleted)
 nodz.signal_NodeEdited.connect(on_nodeEdited)
@@ -114,6 +118,24 @@ nodz.signal_GraphEvaluated.connect(on_graphEvaluated)
 
 nodz.signal_KeyPressed.connect(on_keyPressed)
 
+######################################################################
+# Test Node creation UI
+######################################################################
+
+def demoNodeCreator(nodzInst, nodeName, pos):
+    if nodeName in nodeList:
+        id=0
+        uniqueNodeName = '{}_{}'.format(nodeName, id)
+        while uniqueNodeName in nodzInst.scene().nodes.keys():
+            id+=1
+            uniqueNodeName = '{}_{}'.format(nodeName, id)
+
+        nodzInst.createNode(name=uniqueNodeName, position=pos)
+    else:
+        print "{} is node a recognized node type. Known types are: {}".format(nodeName, nodeList)
+
+nodeList = ["NodeTypeA", "NodeTypeB", "NodeTypeC", "LongAndAnnoyingStringThatWillDisplayFarOfTheBounds"]
+nodz.initNodeCreationHelper(nodeList, demoNodeCreator)
 
 ######################################################################
 # Test API
