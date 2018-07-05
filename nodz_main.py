@@ -1621,6 +1621,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
             self.scene().parent().signal_NodeRightClicked.emit(self.name)
         super(NodeItem, self).mouseReleaseEvent(event)
 
+        self.setZValue(self.baseZValue) #restore the base Z order (notes behind, other ndoes in front...)
+
     def hoverLeaveEvent(self, event):
         """
         .
