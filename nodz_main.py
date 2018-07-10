@@ -72,6 +72,7 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # Node creation helper
         self.nodeCreationPopup = None
+        self.nodeCreationPopupKeyEvent = None
 
     def wheelEvent(self, event):
         """
@@ -305,7 +306,7 @@ class Nodz(QtWidgets.QGraphicsView):
         if event.key() == QtCore.Qt.Key_S:
             self._nodeSnap = True
 
-        if event.key() == QtCore.Qt.Key_Tab:
+        if event.key() == self.nodeCreationPopupKeyEvent:
             self.nodeCreationPopup.popup()
 
         if event.key() == QtCore.Qt.Key_Escape:
@@ -487,11 +488,12 @@ class Nodz(QtWidgets.QGraphicsView):
         # Connect signals.
         self.scene().selectionChanged.connect(self._returnSelection)
 
-    def initNodeCreationHelper(self, completerNodeList=[], nodeCreatorCallback=None):
+    def initNodeCreationHelper(self, completerNodeList=[], nodeCreatorCallback=None, keyEvent=QtCore.Qt.Key_Tab):
         """
         Setup the node's creation helper that is available from the tab key
 
         """
+        self.nodeCreationPopupKeyEvent = keyEvent
         self.nodeCreationPopup = nodz_extra.QtPopupLineEditWidget(self.scene().views()[0])
         self.nodeCreationPopup.setNodesList(completerNodeList)
         if nodeCreatorCallback is not None:
