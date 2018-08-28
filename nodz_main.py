@@ -74,6 +74,13 @@ class Nodz(QtWidgets.QGraphicsView):
         self.nodeCreationPopup = None
         self.nodeCreationPopupKeyEvent = None
 
+    def event(self, event):
+        if (event.type() == QtCore.QEvent.KeyPress):    # bypass QWidget behaviors which is to checks for Tab and Shift+Tab and tries to move the focus appropriately
+            self.keyPressEvent(event)
+            return True
+
+        return super(Nodz, self).event(event)
+    
     def wheelEvent(self, event):
         """
         Zoom in the view with the mouse wheel.
@@ -538,20 +545,12 @@ class Nodz(QtWidgets.QGraphicsView):
             if not position:
                 # Get the center of the view.
                 position = self.mapToScene(self.viewport().rect().center())
-            position = position - nodeItem.nodeCenter
-
-            # Resize scene if node position is outside of the scene
-            sceneRect = self.scene().sceneRect()
-            if position.x() > sceneRect.width():
-                sceneRect.setWidth( position.x() + nodeItem.baseWidth )
-                self.scene().setSceneRect(sceneRect)
-            if position.y() > sceneRect.height():
-                sceneRect.setHeight( position.y() + nodeItem.baseHeight )            
-                self.scene().setSceneRect(sceneRect)
 
             # Set node position.
             self.scene().addItem(nodeItem)
-            nodeItem.setPos(position)
+            nodeItem.setPos(position - nodeItem.nodeCenter)
+
+            nodeItem.checkIsWithinSceneRect()
 
             # Emit signal.
             self.signal_NodeCreated.emit(name)
@@ -1476,6 +1475,22 @@ class NodeItem(QtWidgets.QGraphicsItem):
         rect = QtCore.QRectF(rect)
         return rect
 
+    def checkIsWithinSceneRect(self):
+        """
+        Resize scene if node position is outside of the scene
+
+        """
+        currentPos = self.pos()
+        sceneRect = self.scene().sceneRect()
+        if currentPos.x() + self.baseWidth  > sceneRect.width():
+            sceneRect.setWidth( currentPos.x() + 1.2*self.baseWidth )
+            self.scene().setSceneRect(sceneRect)
+            self.scene().updateScene()
+        if currentPos.y() + self.height > sceneRect.height():
+            sceneRect.setHeight( currentPos.y() + 1.2*self.height )
+            self.scene().setSceneRect(sceneRect)
+            self.scene().updateScene()
+
     def shape(self):
         """
         The shape of the item.
@@ -1620,6 +1635,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
             else:
                 self.scene().updateScene()
                 super(NodeItem, self).mouseMoveEvent(event)
+
+        self.checkIsWithinSceneRect()
 
     def mouseReleaseEvent(self, event):
         """
