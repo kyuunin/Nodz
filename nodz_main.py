@@ -538,10 +538,20 @@ class Nodz(QtWidgets.QGraphicsView):
             if not position:
                 # Get the center of the view.
                 position = self.mapToScene(self.viewport().rect().center())
+            position = position - nodeItem.nodeCenter
+
+            # Resize scene if node position is outside of the scene
+            sceneRect = self.scene().sceneRect()
+            if position.x() > sceneRect.width():
+                sceneRect.setWidth( position.x() + nodeItem.baseWidth )
+                self.scene().setSceneRect(sceneRect)
+            if position.y() > sceneRect.height():
+                sceneRect.setHeight( position.y() + nodeItem.baseHeight )            
+                self.scene().setSceneRect(sceneRect)
 
             # Set node position.
             self.scene().addItem(nodeItem)
-            nodeItem.setPos(position - nodeItem.nodeCenter)
+            nodeItem.setPos(position)
 
             # Emit signal.
             self.signal_NodeCreated.emit(name)
