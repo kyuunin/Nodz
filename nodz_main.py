@@ -25,8 +25,11 @@ class Nodz(QtWidgets.QGraphicsView):
     signal_NodeEdited = QtCore.Signal(object, object)
     signal_NodeSelected = QtCore.Signal(object)
     signal_NodeMoved = QtCore.Signal(str, object)
-    signal_NodeRightClicked = QtCore.Signal(str)
+    # signal_NodeRightClicked = QtCore.Signal(str)
     signal_NodeDoubleClicked = QtCore.Signal(str)
+
+    signal_ViewContextMenuEvent = QtCore.Signal(object) # view context menu event
+    signal_NodeContextMenuEvent = QtCore.Signal(object, str) # node context menu event, node name
 
     signal_AttrCreated = QtCore.Signal(object, object)
     signal_AttrDeleted = QtCore.Signal(object, object)
@@ -44,6 +47,10 @@ class Nodz(QtWidgets.QGraphicsView):
 
     signal_KeyPressed = QtCore.Signal(object)
     signal_Dropped = QtCore.Signal()
+
+    signal_dragEvent = QtCore.Signal(object, object) # dragDropEvent, nodzInst
+    signal_dragMoveEvent = QtCore.Signal(object, object) # dragDropEvent, nodzInst
+    signal_dropEvent = QtCore.Signal(object, object) # dragDropEvent, nodzInst
 
     def __init__(self, parent, configPath=defaultConfigPath):
         """
@@ -67,6 +74,7 @@ class Nodz(QtWidgets.QGraphicsView):
         self.currentHoveredAttribute = None
         self.currentHoveredLink = None
         self.sourceSlot = None
+        self.allowLoop = True        
 
         # Display options.
         self.currentState = 'DEFAULT'
@@ -75,6 +83,36 @@ class Nodz(QtWidgets.QGraphicsView):
         # Node creation helper
         self.nodeCreationPopup = None
         self.nodeCreationPopupKeyEvent = None
+
+        # drag n drop data to set when event called
+        self.dragAccept = False
+        self.dragMoveAccept = False
+        self.dropAccept = False
+
+    def setEnableDrop(self, enabled):
+        self.setAcceptDrops(enabled)
+        # self.setDropIndicatorShown(enabled)
+
+    def dragEnterEvent(self, e):
+        self.signal_dragEvent.emit(e, self)
+        if self.dragAccept:
+            e.accept()
+        else:
+            e.ignore() 
+
+    def dragMoveEvent(self, e):  
+        self.signal_dragMoveEvent.emit(e, self)
+        if self.dragMoveAccept:
+            e.accept()
+        else:
+            e.ignore() 
+
+    def dropEvent(self, e):    
+        self.signal_dropEvent.emit(e, self)
+        if self.dropAccept:        
+            e.accept()
+        else:
+            e.ignore() 
 
     def event(self, event):
         if (event.type() == QtCore.QEvent.KeyPress):    # bypass QWidget behaviors which is to checks for Tab and Shift+Tab and tries to move the focus appropriately
@@ -101,6 +139,14 @@ class Nodz(QtWidgets.QGraphicsView):
 
         self.scale(zoomFactor, zoomFactor)
         self.currentState = 'DEFAULT'
+
+    def contextMenuEvent(self, event):
+        p=event.pos()
+        item=self.itemAt(p.x(),p.y())
+        if item is not None:
+            item.contextMenuEvent(event)
+            return
+        self.signal_ViewContextMenuEvent.emit(event)
 
     def mousePressEvent(self, event):
         """
@@ -317,6 +363,9 @@ class Nodz(QtWidgets.QGraphicsView):
 
         super(Nodz, self).mouseReleaseEvent(event)
 
+        if(event.button() == QtCore.Qt.MouseButton.RightButton and not event.isAccepted()):
+            self.signal_ViewRightClicked.emit()
+
     def keyPressEvent(self, event):
         """
         Save pressed key and apply shortcuts.
@@ -485,7 +534,7 @@ class Nodz(QtWidgets.QGraphicsView):
             for node in self.scene().selectedItems():
                 if type(node) is NodeItem:
                     self.selectedNodes.append(node.name)
-
+        
         # Emit signal.
         self.signal_NodeSelected.emit(self.selectedNodes)
 
@@ -804,8 +853,6 @@ class Nodz(QtWidgets.QGraphicsView):
             node.attrs[index] = newName
 
         if isinstance(newIndex, int):
-            attrName = node.attrs[index]
-
             utils._swapListIndices(node.attrs, index, newIndex)
 
             # Refresh connections.
@@ -867,7 +914,6 @@ class Nodz(QtWidgets.QGraphicsView):
             node = self.scene().nodes[nodeName]
             if node is not None:
                 nodeWidth = node.baseWidth + margin
-                connectionCount=0
                 isRoot = True
                 for plug in node.plugs.values():
                     isRoot &= (len(plug.connections)==0)
@@ -875,9 +921,9 @@ class Nodz(QtWidgets.QGraphicsView):
                     rootNodes.append(node)
         
         maxGraphWidth = 0
-        rootGraphs = [[[0 for x in range(0)] for y in range(0)] for z in range(0)]
+        rootGraphs = [[[0 for _x in range(0)] for _y in range(0)] for _z in range(0)]
         for rootNode in rootNodes:
-            rootGraph = [[0 for x in range(0)] for y in range(0)]
+            rootGraph = [[0 for _x in range(0)] for _y in range(0)]
             rootGraph.append([rootNode])
             
             currentGraphLevel = 0
@@ -1087,8 +1133,12 @@ class Nodz(QtWidgets.QGraphicsView):
             targetNode = target.split('.')[0]
             targetAttr = target.split('.')[1]
 
-            self.createConnection(sourceNode, sourceAttr,
-                                  targetNode, targetAttr)
+            plugItem = self.scene().nodes[sourceNode].plugs[sourceAttr]
+            socketItem = self.scene().nodes[targetNode].sockets[targetAttr]
+
+            if (socketItem.accepts(plugItem)):
+                self.createConnection(sourceNode, sourceAttr,
+                                    targetNode, targetAttr)
 
         self.scene().update()
 
@@ -1747,6 +1797,9 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
             offset += self.attrHeight
 
+    def contextMenuEvent(self, event):
+        self.scene().parent().signal_NodeContextMenuEvent.emit(event, self.name)
+
     def mousePressEvent(self, event):
         """
         Keep the selected node on top of the others.
@@ -1879,8 +1932,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 nodzInst.createConnection(fromNode, fromAttr, self, theNodeSocketAttr)
                 nodzInst.createConnection(self, theNodePlugAttr, toNode, toAttr)
                 
-        if(event.button() == QtCore.Qt.MouseButton.RightButton):
-            self.scene().parent().signal_NodeRightClicked.emit(self.name)
+        # if(event.button() == QtCore.Qt.MouseButton.RightButton):
+        #     self.scene().parent().signal_NodeRightClicked.emit(self.name)
 
         nodzInst.currentHoveredLink = None
 
@@ -1978,6 +2031,34 @@ class SlotItem(QtWidgets.QGraphicsItem):
         #no connection with different types
         if slot_item.dataType != self.dataType:
             return False
+
+        # if loop forbidden, the plug/source node should not be already connected to target via its source nodes
+        nodzInst = self.scene().views()[0]
+        if not nodzInst.allowLoop:
+            validConnection = True
+            processedNodes = list()
+            nodesToProcess = list()
+            nextNodesToProcess = list()
+            processedNodes.append(self.parentItem().name) #forbid target node in parents
+            nodesToProcess.append(slot_item.parentItem()) # check parents from sourceNode
+
+            while (not len(nodesToProcess) == 0 and validConnection):
+                for nodeToProcess in nodesToProcess:
+                    processedNodes.append(nodeToProcess.name)
+                    for socket in nodeToProcess.sockets.values():
+                        for connection in socket.connections:
+                            if connection.plugNode in processedNodes:
+                                validConnection = False
+                                break
+                            nextNodesToProcess.append( self.scene().nodes[connection.plugNode])
+                        if not validConnection:
+                            break
+                nodesToProcess = nextNodesToProcess[:]
+                nextNodesToProcess[:] = []
+                # del nodesToProcess[:]
+            if not validConnection:
+                print "This Connection would make a loop, this is forbidden"
+                return            
 
         #otherwize, all fine.
         return True
