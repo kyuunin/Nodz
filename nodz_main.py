@@ -89,6 +89,8 @@ class Nodz(QtWidgets.QGraphicsView):
         self.dragMoveAccept = False
         self.dropAccept = False
 
+        self.cutTool = None
+
     def setEnableDrop(self, enabled):
         self.setAcceptDrops(enabled)
         # self.setDropIndicatorShown(enabled)
@@ -433,7 +435,14 @@ class Nodz(QtWidgets.QGraphicsView):
         Initialize the cut tool at the given position.
 
         """
-        self.origin = position
+        if (self.cutTool is None):
+            self.cutTool = QtWidgets.QGraphicsLineItem()
+            self.cutTool.setZValue(65535)
+            pen = QtGui.QPen(QtCore.Qt.red, 2, QtCore.Qt.DashLine)
+            self.cutTool.setPen(pen)
+            self.cutTool.hide()
+            self.scene().addItem(self.cutTool)
+
         self.cutToolStartScenePos = self.mapToScene(position)
         self.cutTool.setPos(0,0)
         self.cutTool.setLine(self.cutToolStartScenePos.x(), self.cutToolStartScenePos.y(), self.cutToolStartScenePos.x(), self.cutToolStartScenePos.y())
@@ -519,7 +528,8 @@ class Nodz(QtWidgets.QGraphicsView):
         for node in self.scene().selectedItems():
             if type(node) is NodeItem:
                 selected_nodes.append(node.name)
-            node._remove()
+            if node.scene() is not None: # else already deleted by a previous node
+                node._remove()                
 
         # Emit signal.
         self.signal_NodeDeleted.emit(selected_nodes)
@@ -571,7 +581,6 @@ class Nodz(QtWidgets.QGraphicsView):
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.rubberband = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle, self)
-        self.cutTool = QtWidgets.QGraphicsLineItem()
               
         # Setup scene.
         scene = NodeScene(self)
@@ -582,13 +591,6 @@ class Nodz(QtWidgets.QGraphicsView):
         # Connect scene node moved signal
         scene.signal_NodeMoved.connect(self.signal_NodeMoved)
 
-        self.cutTool.setZValue(65535)
-        pen = QtGui.QPen(QtCore.Qt.red, 2, QtCore.Qt.DashLine)
-        # pen.setColor(theEditorConfiguration::getInstance()._borderColor);
-        self.cutTool.setPen(pen)
-        self.cutTool.hide()
-        scene.addItem(self.cutTool)
-       
         # Tablet zoom.
         self.previousMouseOffset = 0
         self.zoomDirection = 0
@@ -1207,8 +1209,9 @@ class Nodz(QtWidgets.QGraphicsView):
         Clear the graph.
 
         """
+        self.cutTool = None
         self.scene().clear()
-        self.scene().nodes = dict()
+        self.scene().nodes = dict()        
 
         # Emit signal.
         self.signal_GraphCleared.emit()
@@ -2236,7 +2239,7 @@ class PlugItem(SlotItem):
         super(PlugItem, self).__init__(parent, attribute, preset, index, dataType, maxConnections)
 
         # Storage.
-        self.attributte = attribute
+        self.attribute = attribute
         self.preset = preset
         self.slotType = 'plug'
 
@@ -2344,7 +2347,7 @@ class SocketItem(SlotItem):
         super(SocketItem, self).__init__(parent, attribute, preset, index, dataType, maxConnections)
 
         # Storage.
-        self.attributte = attribute
+        self.attribute = attribute
         self.preset = preset
         self.slotType = 'socket'
 
