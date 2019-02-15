@@ -1,14 +1,21 @@
 import os
 import re
 import json
+import copy
 
 from glm.Qtpy.Qt import QtGui, QtCore, QtWidgets
 import nodz_utils as utils
 import nodz_extra
 
-
 defaultConfigPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'default_config.json')
 
+class ConnectionInfo():
+     def __init__(self, connectionItem):
+        # Storage.
+        self.socketNode = connectionItem.socketNode
+        self.socketAttr = connectionItem.socketAttr
+        self.plugNode = connectionItem.plugNode
+        self.plugAttr = connectionItem.plugAttr
 
 class Nodz(QtWidgets.QGraphicsView):
 
@@ -19,6 +26,16 @@ class Nodz(QtWidgets.QGraphicsView):
     different user interactions.
 
     """
+
+    # if we want to be more generic, should use pre and post signals, and fetch whatever in Layout side, but this is not resilient to nested calls :/
+    # some calls have not been handled via those methodes : createNode (handled via nodeCreator overload), editNode, deleteNode, createAttribute, editAttribute, deleteAttribute : they are not called directly by LayoutEditor, but encapsulated via nodeCreator, loadGraph, etc. We issue less events if handling the top level action issueing this
+    # all undo calls start with emitter nodzInstance
+    signal_UndoRedoModifySelection = QtCore.Signal(object, object, object) # node id list before, node id list after. signal_NodeSelected does not send previous selection
+    signal_UndoRedoDeleteSelectedNodes = QtCore.Signal(object, object) # list of deleted nodes (user data copies). signal_NodeDeleted does only send deleted node names, too late to get their userData for redo
+    # # signal_UndoRedoEditNodeName = QtCore.Signal(object, str, str) # node name before, node name after UNUSED
+    signal_UndoRedoAddNode = QtCore.Signal(object, object) # node added user data. For consistency with signal_UndoRedoDeleteSelectedNodes (we may actually store undo via signal_NodeCreated, but would be called a lot of time from loadGraph)
+    signal_UndoRedoMoveNodes = QtCore.Signal(object, object, object, object) # node name list, fromPos list, toPos list. signal_NodeMoved does not send previous position
+    signal_UndoRedoConnectNodes = QtCore.Signal(object, object, object) # list of removed ConnectionInfo (potentially due to addition), list of new ConnectionInfo. Could deal with it with plug/socket connected / disconnected but would be tedious with a lot of calls
 
     signal_NodeCreated = QtCore.Signal(object)
     signal_NodeDeleted = QtCore.Signal(object)
@@ -66,7 +83,7 @@ class Nodz(QtWidgets.QGraphicsView):
         self.gridVisToggle = True
         self.gridSnapToggle = False
         self._nodeSnap = False
-        self.selectedNodes = None
+        self.selectedNodes = list()
 
         # Connections data.
         self.drawingConnection = False
@@ -355,11 +372,19 @@ class Nodz(QtWidgets.QGraphicsView):
             deltaLine = scenePos - self.cutToolStartScenePos
             self.cutTool.setLine(self.cutToolStartScenePos.x(), self.cutToolStartScenePos.y(), self.cutToolStartScenePos.x() + deltaLine.x(), self.cutToolStartScenePos.y() + deltaLine.y())
             painterPath = self._releaseCutTool()
+
+            removedConnections = list()
+            addedConnections = list()
+
             self.setInteractive(True)
             for item in self.scene().items(painterPath):
                 if (isinstance(item, ConnectionItem)):
+                    removedConnections.append(ConnectionInfo(item))
                     item._remove()
             self.setCursor(QtCore.Qt.ArrowCursor)
+            
+            if len(removedConnections) > 0:
+                self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)            
 
         self.currentState = 'DEFAULT'
 
@@ -524,21 +549,46 @@ class Nodz(QtWidgets.QGraphicsView):
         Delete selected nodes.
 
         """
+        # self.signal_UndoRedoPreDeleteSelectedNodes.emit()
+        removedConnections = list()
+        addedConnections = list()
+        deletedNodesUserData = list()
+
         selected_nodes = list()
         for node in self.scene().selectedItems():
             if type(node) is NodeItem:
                 selected_nodes.append(node.name)
             if node.scene() is not None: # else already deleted by a previous node
-                node._remove()                
+                # stack all sockets connections.
+                for socket in node.sockets.values():
+                    for iCon in range(0, len(socket.connections)):
+                        removedConnections.append(ConnectionInfo(socket.connections[iCon]))
+                
+                # stack all plugs connections.
+                for plug in node.plugs.values():
+                    for iCon in range(0, len(plug.connections)):
+                        removedConnections.append(ConnectionInfo(plug.connections[iCon]))
+
+                deletedNodesUserData.append(copy.deepcopy(node.userData))
+                node._remove()
 
         # Emit signal.
-        self.signal_NodeDeleted.emit(selected_nodes)
+        if len(selected_nodes) > 0:
+            self.signal_NodeDeleted.emit(selected_nodes)
+            if (len(removedConnections)>0 or len(addedConnections)>0):
+                self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
+            self.signal_UndoRedoDeleteSelectedNodes.emit(self, deletedNodesUserData)
 
     def _returnSelection(self):
         """
         Wrapper to return selected items.
 
         """
+
+        #self.selectedNodes
+        # self.signal_UndoRedoPreModifySelection.emit()
+        oldSelectedNodes = self.selectedNodes
+
         self.selectedNodes = list()
         if self.scene().selectedItems():
             for node in self.scene().selectedItems():
@@ -547,6 +597,10 @@ class Nodz(QtWidgets.QGraphicsView):
         
         # Emit signal.
         self.signal_NodeSelected.emit(self.selectedNodes)
+
+        #self.selectedNodes
+        if (oldSelectedNodes != self.selectedNodes):
+            self.signal_UndoRedoModifySelection.emit(self, oldSelectedNodes, self.selectedNodes)
 
 
     ##################################################################
@@ -634,6 +688,7 @@ class Nodz(QtWidgets.QGraphicsView):
         :return : The created node
 
         """
+        print("create node {} at creaetNode pos {}".format(name, position))
         # Check for name clashes
         if name in self.scene().nodes.keys():
             print 'A node with the same name already exists : {0}'.format(name)
@@ -676,10 +731,30 @@ class Nodz(QtWidgets.QGraphicsView):
 
         if node in self.scene().nodes.values():
             nodeName = node.name
+
+            # Should handle UndoRedo here, but deleteNode is not used anywhere in our code
+
+            removedConnections = list()
+            addedConnections = list()
+            selected_nodes = list()
+            selected_nodes.append(node)
+
+            # stack all sockets connections.
+            for socket in node.sockets.values():
+                while len(socket.connections)>0:
+                    removedConnections.append(ConnectionInfo(socket.connections[0]))
+            
+            # stack all plugs connections.
+            for plug in node.plugs.values():
+                while len(plug.connections)>0:
+                    removedConnections.append(ConnectionInfo(plug.connections[0]))
+            
             node._remove()
 
             # Emit signal.
             self.signal_NodeDeleted.emit([nodeName])
+            self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
+            self.signal_UndoRedoDeleteSelectedNodes.emit(self, selected_nodes)
 
     def editNode(self, node, newName=None):
         """
@@ -706,28 +781,31 @@ class Nodz(QtWidgets.QGraphicsView):
                 print 'Node edition aborted !'
                 return
             else:
+                #oldName = node.name
+
                 node.name = newName
+                
+                # Replace node data.
+                self.scene().nodes[newName] = self.scene().nodes[oldName]
+                self.scene().nodes.pop(oldName)
 
-        # Replace node data.
-        self.scene().nodes[newName] = self.scene().nodes[oldName]
-        self.scene().nodes.pop(oldName)
+                # Store new node name in the connections
+                if node.sockets:
+                    for socket in node.sockets.values():
+                        for connection in socket.connections:
+                            connection.socketNode = newName
 
-        # Store new node name in the connections
-        if node.sockets:
-            for socket in node.sockets.values():
-                for connection in socket.connections:
-                    connection.socketNode = newName
+                if node.plugs:
+                    for plug in node.plugs.values():
+                        for connection in plug.connections:
+                            connection.plugNode = newName
 
-        if node.plugs:
-            for plug in node.plugs.values():
-                for connection in plug.connections:
-                    connection.plugNode = newName
-
-        node.update()
-
-        # Emit signal.
-        self.signal_NodeEdited.emit(oldName, newName)
-
+                node.update()
+                
+                # Emit signal.
+                self.signal_NodeEdited.emit(oldName, newName)
+                # editNode ot used in golaem, else needs an event
+                # self.signal_UndoRedoEditNodeName.emit(self, oldName, newName)
 
     # ATTRS
     def createAttribute(self, node, name='default', index=-1, preset='attr_default', plug=True, socket=True, dataType=None, plugMaxConnections=-1, socketMaxConnections=1):
@@ -904,6 +982,8 @@ class Nodz(QtWidgets.QGraphicsView):
 
         """
 
+        self.signal_PreLayoutGraph.emit()
+
         nodeWidth = 300    #default value, will be replaced by node.baseWidth + margin when iterating on the first node
         sceneNodes = self.scene().nodes.keys()
         if (nodes is None) or len(nodes)==0:
@@ -961,6 +1041,11 @@ class Nodz(QtWidgets.QGraphicsView):
 
         alreadyVisitedNodes = []
         baseYpos = margin
+
+        nodesMovedList = list()
+        fromPosList = list()
+        toPosList = list()
+
         for rootGraph in rootGraphs:
             #set positions...
             currentXpos = max(0, 0.5*(self.scene().width()-maxGraphWidth)) + maxGraphWidth-nodeWidth  #middle of the view
@@ -999,10 +1084,13 @@ class Nodz(QtWidgets.QGraphicsView):
 
                         if node_pos.x() < 0 or node_pos.x() > self.scene().width() or node_pos.y()<0 or node_pos.y() > self.scene().height():
                             print "Warning: {0}: Invalid node position : ({1} ; {2}), frame dimension: ({3} ; {4}).".format(node.name, node_pos.x(), node_pos.y(), self.scene().width(), self.scene().height())
-                            
+
+                        nodesMovedList.append(node.name)
+                        fromPosList.append(node.pos())
                         node.setPos(node_pos)
                         # Emit signal.
                         self.signal_NodeMoved.emit(node.name, node.pos())
+                        toPosList.append(node.pos())
 
                     currentYpos += node.height + margin
                     nextBaseYpos = max(nextBaseYpos, currentYpos)
@@ -1010,6 +1098,7 @@ class Nodz(QtWidgets.QGraphicsView):
             baseYpos = nextBaseYpos
 
         self.scene().updateScene()
+        self.signal_UndoRedoMoveNodes.emit(self, nodesMovedList, fromPosList, toPosList)
 
     def saveGraph(self, filePath='path'):
         """
@@ -1146,6 +1235,15 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # Emit signal.
         self.signal_GraphLoaded.emit()
+
+    def removeConnectionByInfo(self, connectionInfo):
+        for item in self.scene().items():
+            if (isinstance(item, ConnectionItem)):   
+                if (item.plugNode == connectionInfo.plugNode and item.plugAttr == connectionInfo.plugAttr and item.socketNode == connectionInfo.socketNode and item.socketAttr == connectionInfo.socketAttr):
+                    item._remove()
+
+    def createConnectionByInfo(self, connectionInfo):
+        self.createConnection(connectionInfo.plugNode, connectionInfo.plugAttr, connectionInfo.socketNode, connectionInfo.socketAttr)
 
     def createConnection(self, sourceNode, sourceAttr, targetNode, targetAttr):
         """
@@ -1355,6 +1453,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.sockets = dict()
 
         self.attributeBeingPlugged = None
+        self.lastMousePressPos = None
 
         # Methods.
         self._createStyle(config)
@@ -1579,6 +1678,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
         """
         #reconnect if only one in and one out
+        removedConnections = list()
+        addedConnections = list()
         if len(self.sockets) == 1 and len(self.plugs) == 1:
             nextSocketConnections = self.plugs.itervalues().next().connections
             previousPlugConnections = self.sockets.itervalues().next().connections
@@ -1589,15 +1690,20 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
                 if (socketItem.accepts(plugItem)):
                     nodzInst = self.scene().views()[0]
-                    nodzInst.createConnection(previousPlugConnections[0].plugNode, previousPlugConnections[0].plugAttr, nextSocketConnections[0].socketNode, nextSocketConnections[0].socketAttr)
+                    newConnection = nodzInst.createConnection(previousPlugConnections[0].plugNode, previousPlugConnections[0].plugAttr, nextSocketConnections[0].socketNode, nextSocketConnections[0].socketAttr)
+                    addedConnections.append(ConnectionInfo(newConnection))
 
         for socket in self.sockets.values(): # Remove all sockets connections.
             while len(socket.connections)>0:
+                removedConnections.append(ConnectionInfo(socket.connections[0]))
                 socket.connections[0]._remove()
 
         for plug in self.plugs.values(): # Remove all plugs connections.
             while len(plug.connections)>0:
+                removedConnections.append(ConnectionInfo(plug.connections[0]))
                 plug.connections[0]._remove()
+
+        self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
     
     def _remove(self):
         """
@@ -1808,6 +1914,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
         Keep the selected node on top of the others.
 
         """
+        # nodzInst = self.scene().views()[0]
+
         maxZValue = 0
         nodes = self.scene().nodes
         for node in nodes.values():
@@ -1827,6 +1935,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
             if (self.attributeBeingPlugged is not None):
                 self.attributeBeingPlugged.mousePressEvent(event)
         else:
+            self.lastMousePressPos = self.pos()
             super(NodeItem, self).mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, event):
@@ -1903,7 +2012,19 @@ class NodeItem(QtWidgets.QGraphicsItem):
         # Emit node moved signal.
         nodzInst = self.scene().views()[0]
         if(event.button() == QtCore.Qt.MouseButton.LeftButton):
+
             self.scene().signal_NodeMoved.emit(self.name, self.pos())
+            
+            nodesMovedList = [self.name]
+            fromPosList = [self.lastMousePressPos]
+            toPosList = [self.pos()]
+            # nodesMovedList.append(self)
+            # fromPosList.append()
+            # toPosList.append(self.pos())
+
+            # print("move node {} from {} to {}".format(self.name, self.lastMousePressPos, self.pos()))
+
+            nodzInst.signal_UndoRedoMoveNodes.emit(nodzInst, nodesMovedList, fromPosList, toPosList)
 
             #handle connection if dropped an unconnected "pass through" node on a link
             if nodzInst.currentHoveredLink is not None:    
@@ -1914,10 +2035,17 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
                 theNodePlugAttr = self.plugs.itervalues().next().attribute
                 theNodeSocketAttr = self.sockets.itervalues().next().attribute
-                   
+
+                removedConnections = list()
+                addedConnections = list()
+
+                removedConnections.append(ConnectionInfo(nodzInst.currentHoveredLink))
                 nodzInst.currentHoveredLink._remove()
-                nodzInst.createConnection(fromNode, fromAttr, self.name, theNodeSocketAttr)
-                nodzInst.createConnection(self.name, theNodePlugAttr, toNode, toAttr)
+
+                addedConnections.append(ConnectionInfo(nodzInst.createConnection(fromNode, fromAttr, self.name, theNodeSocketAttr)))
+                addedConnections.append(ConnectionInfo(nodzInst.createConnection(self.name, theNodePlugAttr, toNode, toAttr)))
+
+                nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
             
         elif(event.button() == QtCore.Qt.MouseButton.MiddleButton):
             if (self.attributeBeingPlugged is not None):
@@ -1930,10 +2058,17 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
                 theNodePlugAttr = self.plugs.itervalues().next().key()
                 theNodeSocketAttr = self.sockets.itervalues().next()().key()
+
+                removedConnections = list()
+                addedConnections = list()                
                    
+                removedConnections.append(ConnectionInfo(nodzInst.currentHoveredLink))
                 nodzInst.currentHoveredLink._remove()
-                nodzInst.createConnection(fromNode, fromAttr, self, theNodeSocketAttr)
-                nodzInst.createConnection(self, theNodePlugAttr, toNode, toAttr)
+
+                addedConnections.append(ConnectionInfo(nodzInst.createConnection(fromNode, fromAttr, self, theNodeSocketAttr)))
+                addedConnections.append(ConnectionInfo(nodzInst.createConnection(self, theNodePlugAttr, toNode, toAttr)))
+
+                nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
                 
         # if(event.button() == QtCore.Qt.MouseButton.RightButton):
         #     self.scene().parent().signal_NodeRightClicked.emit(self.name)
@@ -2150,6 +2285,12 @@ class SlotItem(QtWidgets.QGraphicsItem):
                 target.connect(self, self.newConnection)
 
                 self.newConnection.updatePath()
+                
+                removedConnections = list()
+                addedConnections = list()                
+                addedConnections.append(ConnectionInfo(self.newConnection))
+                nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
+
             else:
                 self.newConnection._remove()
         else:
@@ -2305,9 +2446,10 @@ class PlugItem(SlotItem):
         """
         Disconnect the given connection from this plug item.
 
-        """
+        """        
         # Emit signal.
         nodzInst = self.scene().views()[0]
+
         nodzInst.signal_PlugDisconnected.emit(connection.plugNode, connection.plugAttr, connection.socketNode, connection.socketAttr)
 
         # Remove connected socket from plug

@@ -60,11 +60,13 @@ class QtPopupLineEditWidget(QtWidgets.QLineEdit):
     def onCompleterActivatedSlot(self, text):
         pos=QtCore.QPointF(self.nodzInst.mapToScene(self.pos()))
         self.popdown()
-        self.nodeCreator(self.nodzInst, text, pos)
+        newNode = self.nodeCreator(self.nodzInst, text, pos)
+        self.nodzInst.signal_UndoRedoAddNode.emit(self.nodzInst, newNode.userData)
 
     def onReturnPressedSlot(self):
         name = self.text()
         pos = QtCore.QPointF(self.nodzInst.mapToScene(self.pos()))
         self.completer.activated.disconnect(self.onCompleterActivatedSlot)
         self.popdown()
-        self.nodeCreator(self.nodzInst, name, pos)
+        newNode = self.nodeCreator(self.nodzInst, name, pos)
+        self.nodzInst.signal_UndoRedoAddNode.emit(self.nodzInst, newNode.userData)
