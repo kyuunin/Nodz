@@ -688,7 +688,7 @@ class Nodz(QtWidgets.QGraphicsView):
         :return : The created node
 
         """
-        print("create node {} at creaetNode pos {}".format(name, position))
+        # print("create node {} at creaetNode pos {}".format(name, position))
         # Check for name clashes
         if name in self.scene().nodes.keys():
             print 'A node with the same name already exists : {0}'.format(name)
