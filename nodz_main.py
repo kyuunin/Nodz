@@ -551,32 +551,42 @@ class Nodz(QtWidgets.QGraphicsView):
         """
         # self.signal_UndoRedoPreDeleteSelectedNodes.emit()
         removedConnections = list()
-        addedConnections = list()
         deletedNodesUserData = list()
 
+        # iterate on nodes first, will delete single connections after getting back selected items
         selected_nodes = list()
         for node in self.scene().selectedItems():
             if type(node) is NodeItem:
+                #NodeItem
                 selected_nodes.append(node.name)
-            if node.scene() is not None: # else already deleted by a previous node
-                # stack all sockets connections.
-                for socket in node.sockets.values():
-                    for iCon in range(0, len(socket.connections)):
-                        removedConnections.append(ConnectionInfo(socket.connections[iCon]))
-                
-                # stack all plugs connections.
-                for plug in node.plugs.values():
-                    for iCon in range(0, len(plug.connections)):
-                        removedConnections.append(ConnectionInfo(plug.connections[iCon]))
+                if node.scene() is not None: # else already deleted by a previous node
+                    # stack all sockets connections.
+                    for socket in node.sockets.values():
+                        for iCon in range(0, len(socket.connections)):
+                            removedConnections.append(ConnectionInfo(socket.connections[iCon]))
+                    
+                    # stack all plugs connections.
+                    for plug in node.plugs.values():
+                        for iCon in range(0, len(plug.connections)):
+                            removedConnections.append(ConnectionInfo(plug.connections[iCon]))
 
-                deletedNodesUserData.append(copy.deepcopy(node.userData))
+                    deletedNodesUserData.append(copy.deepcopy(node.userData))
                 node._remove()
+
+        # scene should be refreshed with deleted items absent of selection now, just process remaining single connectionItems
+        for node in self.scene().selectedItems():
+            if type(node) is ConnectionItem:
+                #connectionItem
+                removedConnections.append(ConnectionInfo(node))
+                node._remove()
+
+        if len(removedConnections)>0 :
+            addedConnections = list()
+            self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
 
         # Emit signal.
         if len(selected_nodes) > 0:
             self.signal_NodeDeleted.emit(selected_nodes)
-            if (len(removedConnections)>0 or len(addedConnections)>0):
-                self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
             self.signal_UndoRedoDeleteSelectedNodes.emit(self, deletedNodesUserData)
 
     def _returnSelection(self):
@@ -741,13 +751,15 @@ class Nodz(QtWidgets.QGraphicsView):
 
             # stack all sockets connections.
             for socket in node.sockets.values():
-                while len(socket.connections)>0:
-                    removedConnections.append(ConnectionInfo(socket.connections[0]))
+                if len(socket.connections)>0:
+                    for socketConnection in socket.connections:
+                        removedConnections.append(ConnectionInfo(socketConnection))
             
             # stack all plugs connections.
             for plug in node.plugs.values():
-                while len(plug.connections)>0:
-                    removedConnections.append(ConnectionInfo(plug.connections[0]))
+                if len(plug.connections)>0:
+                    for plugConnection in plug.connections:
+                        removedConnections.append(ConnectionInfo(plugConnection))
             
             node._remove()
 
@@ -981,9 +993,6 @@ class Nodz(QtWidgets.QGraphicsView):
         Auto set nodes positions in the graph according to their connections.
 
         """
-
-        self.signal_PreLayoutGraph.emit()
-
         nodeWidth = 300    #default value, will be replaced by node.baseWidth + margin when iterating on the first node
         sceneNodes = self.scene().nodes.keys()
         if (nodes is None) or len(nodes)==0:
@@ -1713,8 +1722,6 @@ class NodeItem(QtWidgets.QGraphicsItem):
         in the process
 
         """
-        self.scene().nodes.pop(self.name)
-
         # Remove all sockets connections.
         for socket in self.sockets.values():
             while len(socket.connections)>0:
@@ -1724,6 +1731,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
         for plug in self.plugs.values():
             while len(plug.connections)>0:
                 plug.connections[0]._remove()
+
+        self.scene().nodes.pop(self.name)
 
         # Remove node.
         scene = self.scene()
@@ -1790,10 +1799,10 @@ class NodeItem(QtWidgets.QGraphicsItem):
             return self.plugs.itervalues().next()
         attributeName = self.getAttributeAtPos(scenePos)
         if (attributeName is not None):
-            print "found plug for {}".format(attributeName)
+            #print "found plug for {}".format(attributeName)
             if attributeName in self.plugs.keys():
                 return self.plugs[attributeName]
-        print "found no plug"
+        #print "found no plug"
         return None
 
     def getAttributeSocketAtPos(self, scenePos):
@@ -1804,10 +1813,10 @@ class NodeItem(QtWidgets.QGraphicsItem):
             return self.sockets.itervalues().next()
         attributeName = self.getAttributeAtPos(scenePos)
         if (attributeName is not None):
-            print "found socket for {}".format(attributeName)
+            #print "found socket for {}".format(attributeName)
             if attributeName in self.sockets.keys():
                 return self.sockets[attributeName]
-        print "found no socket"
+        #print "found no socket"
         return None
 
     def shape(self):
