@@ -786,7 +786,7 @@ class Nodz(QtWidgets.QGraphicsView):
 
         oldName = node.name
 
-        if newName != None:
+        if newName is not None:
             # Check for name clashes
             if newName in self.scene().nodes.keys():
                 print 'A node with the same name already exists : {0}'.format(newName)
@@ -915,7 +915,7 @@ class Nodz(QtWidgets.QGraphicsView):
             print 'Attribute creation aborted !'
             return
 
-        if newName != None:
+        if newName is not None:
             if newName in node.attrs:
                 print 'An attribute with the same name already exists : {0}'.format(newName)
                 print 'Attribute edition aborted !'
