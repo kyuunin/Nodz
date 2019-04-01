@@ -1688,7 +1688,17 @@ class NodeItem(QtWidgets.QGraphicsItem):
         """
         #reconnect if only one in and one out
         removedConnections = list()
-        addedConnections = list()
+        addedConnections = list()        
+
+        #store connections before reconnecting in-out nodes, cause it will shunt incoming connection
+        for socket in self.sockets.values(): # Remove all sockets connections.
+            for iCon in range(0, len(socket.connections)):
+                removedConnections.append(ConnectionInfo(socket.connections[iCon]))
+
+        for plug in self.plugs.values(): # Remove all plugs connections.
+            for iCon in range(0, len(plug.connections)):
+                removedConnections.append(ConnectionInfo(plug.connections[iCon]))
+
         if len(self.sockets) == 1 and len(self.plugs) == 1:
             nextSocketConnections = self.plugs.itervalues().next().connections
             previousPlugConnections = self.sockets.itervalues().next().connections
@@ -1702,17 +1712,25 @@ class NodeItem(QtWidgets.QGraphicsItem):
                     newConnection = nodzInst.createConnection(previousPlugConnections[0].plugNode, previousPlugConnections[0].plugAttr, nextSocketConnections[0].socketNode, nextSocketConnections[0].socketAttr)
                     addedConnections.append(ConnectionInfo(newConnection))
 
+        # actually remove remaining connections
         for socket in self.sockets.values(): # Remove all sockets connections.
             while len(socket.connections)>0:
-                removedConnections.append(ConnectionInfo(socket.connections[0]))
                 socket.connections[0]._remove()
 
         for plug in self.plugs.values(): # Remove all plugs connections.
             while len(plug.connections)>0:
-                removedConnections.append(ConnectionInfo(plug.connections[0]))
                 plug.connections[0]._remove()
 
-        self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
+        if (len(removedConnections) > 0 or len(addedConnections) > 0):
+            # for removedCon in removedConnections:
+            #     print "stack undo Redo connections : Remove {}.{} to {}.{}".format(removedCon.plugNode, removedCon.plugAttr, removedCon.socketNode, removedCon.socketAttr )
+
+            # for addedCon in addedConnections:
+            #     print "stack undo Redo connections : Add {}.{} to {}.{}".format(addedCon.plugNode, addedCon.plugAttr, addedCon.socketNode, addedCon.socketAttr )
+
+            # print('disconnectAll')
+            nodzInst = self.scene().views()[0]
+            nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
     
     def _remove(self):
         """
