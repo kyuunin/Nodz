@@ -1712,7 +1712,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 removedConnections.append(ConnectionInfo(plug.connections[0]))
                 plug.connections[0]._remove()
 
-        self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
+        nodzInst = self.scene().views()[0]
+        nodzInst.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
     
     def _remove(self):
         """
