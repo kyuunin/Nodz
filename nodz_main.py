@@ -37,6 +37,9 @@ class Nodz(QtWidgets.QGraphicsView):
     signal_UndoRedoMoveNodes = QtCore.Signal(object, object, object, object) # node name list, fromPos list, toPos list. signal_NodeMoved does not send previous position
     signal_UndoRedoConnectNodes = QtCore.Signal(object, object, object) # list of removed ConnectionInfo (potentially due to addition), list of new ConnectionInfo. Could deal with it with plug/socket connected / disconnected but would be tedious with a lot of calls
 
+    signal_StartCompoundInteraction = QtCore.Signal(object) # starts user interaction on a nodz
+    signal_EndCompoundInteraction = QtCore.Signal(object, bool) # end user interaction on a nodz
+
     signal_NodeCreated = QtCore.Signal(object)
     signal_NodeDeleted = QtCore.Signal(object)
     signal_NodeEdited = QtCore.Signal(object, object)
@@ -1690,6 +1693,10 @@ class NodeItem(QtWidgets.QGraphicsItem):
         removedConnections = list()
         addedConnections = list()        
 
+        nodzInst = self.scene().views()[0]
+
+        nodzInst.signal_StartCompoundInteraction.emit(nodzInst)
+
         #store connections before reconnecting in-out nodes, cause it will shunt incoming connection
         for socket in self.sockets.values(): # Remove all sockets connections.
             for iCon in range(0, len(socket.connections)):
@@ -1708,7 +1715,6 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 socketItem = nextSocketConnections[0].socketItem
 
                 if (socketItem.accepts(plugItem)):
-                    nodzInst = self.scene().views()[0]
                     newConnection = nodzInst.createConnection(previousPlugConnections[0].plugNode, previousPlugConnections[0].plugAttr, nextSocketConnections[0].socketNode, nextSocketConnections[0].socketAttr)
                     addedConnections.append(ConnectionInfo(newConnection))
 
@@ -1729,8 +1735,10 @@ class NodeItem(QtWidgets.QGraphicsItem):
             #     print "stack undo Redo connections : Add {}.{} to {}.{}".format(addedCon.plugNode, addedCon.plugAttr, addedCon.socketNode, addedCon.socketAttr )
 
             # print('disconnectAll')
-            nodzInst = self.scene().views()[0]
             nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
+            nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)
+        else:
+            nodzInst.signal_EndCompoundInteraction.emit(nodzInst, False)
     
     def _remove(self):
         """
@@ -2066,11 +2074,15 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 removedConnections = list()
                 addedConnections = list()
 
+                # pack the layout update call in a single call
+                nodzInst.signal_StartCompoundInteraction.emit(nodzInst)
                 removedConnections.append(ConnectionInfo(nodzInst.currentHoveredLink))
                 nodzInst.currentHoveredLink._remove()
 
                 addedConnections.append(ConnectionInfo(nodzInst.createConnection(fromNode, fromAttr, self.name, theNodeSocketAttr)))
                 addedConnections.append(ConnectionInfo(nodzInst.createConnection(self.name, theNodePlugAttr, toNode, toAttr)))
+
+                nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)
 
                 nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
             
