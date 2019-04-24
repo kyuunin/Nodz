@@ -1697,35 +1697,51 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
         nodzInst.signal_StartCompoundInteraction.emit(nodzInst)
 
+        selectionPlugConnectionItems = list()
+        selectionSocketConnectionItems = list()
+
         #store connections before reconnecting in-out nodes, cause it will shunt incoming connection
-        for socket in self.sockets.values(): # Remove all sockets connections.
-            for iCon in range(0, len(socket.connections)):
-                removedConnections.append(ConnectionInfo(socket.connections[iCon]))
+        for selectedNode in nodzInst.selectedNodes:
+            for socket in self.scene().nodes[selectedNode].sockets.values(): # Remove all sockets connections not in selection
+                for iCon in range(0, len(socket.connections)):
+                    if socket.connections[iCon].plugNode not in nodzInst.selectedNodes:
+                        selectionPlugConnectionItems.append(socket.connections[iCon])
+                        removedConnections.append(ConnectionInfo(socket.connections[iCon]))
+                    
 
-        for plug in self.plugs.values(): # Remove all plugs connections.
-            for iCon in range(0, len(plug.connections)):
-                removedConnections.append(ConnectionInfo(plug.connections[iCon]))
+            for plug in self.scene().nodes[selectedNode].plugs.values(): # Remove all plugs connections.
+                for iCon in range(0, len(plug.connections)):
+                    if plug.connections[iCon].socketNode not in nodzInst.selectedNodes:
+                        selectionSocketConnectionItems.append(plug.connections[iCon])
+                        removedConnections.append(ConnectionInfo(plug.connections[iCon]))
 
-        if len(self.sockets) == 1 and len(self.plugs) == 1:
-            nextSocketConnections = self.plugs.itervalues().next().connections
-            previousPlugConnections = self.sockets.itervalues().next().connections
-            if (len(nextSocketConnections) == 1 and len(previousPlugConnections) == 1):
-                # link previous plug to next socket
-                plugItem = previousPlugConnections[0].plugItem
-                socketItem = nextSocketConnections[0].socketItem
+        if len(selectionPlugConnectionItems) == 1 and len(selectionSocketConnectionItems) == 1:
+            plugItem = selectionPlugConnectionItems[0].plugItem 
+            socketItem = selectionSocketConnectionItems[0].socketItem
 
-                if (socketItem.accepts(plugItem)):
-                    newConnection = nodzInst.createConnection(previousPlugConnections[0].plugNode, previousPlugConnections[0].plugAttr, nextSocketConnections[0].socketNode, nextSocketConnections[0].socketAttr)
-                    addedConnections.append(ConnectionInfo(newConnection))
+            # link previous plug to next socket
+            if (socketItem.accepts(plugItem)):
+                newConnection = nodzInst.createConnection(selectionPlugConnectionItems[0].plugNode, selectionPlugConnectionItems[0].plugAttr, selectionSocketConnectionItems[0].socketNode, selectionSocketConnectionItems[0].socketAttr)
+                addedConnections.append(ConnectionInfo(newConnection))
 
         # actually remove remaining connections
-        for socket in self.sockets.values(): # Remove all sockets connections.
-            while len(socket.connections)>0:
-                socket.connections[0]._remove()
+        for selectedNode in nodzInst.selectedNodes:
+            for socket in self.scene().nodes[selectedNode].sockets.values(): # Remove all sockets connections.
+                if len(socket.connections) > 0:
+                    connectionIndex = len(socket.connections) - 1
+                    while connectionIndex >= 0:
+                        if socket.connections[connectionIndex].plugNode not in nodzInst.selectedNodes:
+                            socket.connections[connectionIndex]._remove()
+                        connectionIndex -= 1
 
-        for plug in self.plugs.values(): # Remove all plugs connections.
-            while len(plug.connections)>0:
-                plug.connections[0]._remove()
+        for selectedNode in nodzInst.selectedNodes:
+            for plug in self.scene().nodes[selectedNode].plugs.values(): # Remove all plugs connections.
+                if len(plug.connections) > 0:
+                    connectionIndex = len(plug.connections) - 1
+                    while connectionIndex >= 0:
+                        if plug.connections[connectionIndex].socketNode not in nodzInst.selectedNodes:
+                            plug.connections[connectionIndex]._remove()
+                        connectionIndex -= 1
 
         if (len(removedConnections) > 0 or len(addedConnections) > 0):
             # for removedCon in removedConnections:
