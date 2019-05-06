@@ -714,7 +714,7 @@ class Nodz(QtWidgets.QGraphicsView):
             # Store node in scene.
             self.scene().nodes[name] = nodeItem
 
-            if position is not None:
+            if position is None:
                 # Get the center of the view.
                 position = self.mapToScene(self.viewport().rect().center())
 
