@@ -41,6 +41,7 @@ class Nodz(QtWidgets.QGraphicsView):
     signal_EndCompoundInteraction = QtCore.Signal(object, bool) # end user interaction on a nodz
 
     signal_NodeCreated = QtCore.Signal(object)
+    signal_NodePreDeleted = QtCore.Signal(object)
     signal_NodeDeleted = QtCore.Signal(object)
     signal_NodeEdited = QtCore.Signal(object, object)
     signal_NodeSelected = QtCore.Signal(object)
@@ -80,6 +81,7 @@ class Nodz(QtWidgets.QGraphicsView):
         super(Nodz, self).__init__(parent)
 
         # Load nodz configuration.
+        self.config = None
         self.loadConfig(configPath)
 
         # General data.
@@ -562,6 +564,14 @@ class Nodz(QtWidgets.QGraphicsView):
             if type(node) is NodeItem:
                 #NodeItem
                 selected_nodes.append(node.name)
+        
+        if len(selected_nodes) > 0:
+            self.signal_NodePreDeleted.emit(selected_nodes)
+         
+        for node in self.scene().selectedItems():
+            if type(node) is NodeItem:
+                #NodeItem
+                selected_nodes.append(node.name)
                 if node.scene() is not None: # else already deleted by a previous node
                     # stack all sockets connections.
                     for socket in node.sockets.values():
@@ -764,6 +774,8 @@ class Nodz(QtWidgets.QGraphicsView):
                     for plugConnection in plug.connections:
                         removedConnections.append(ConnectionInfo(plugConnection))
             
+            self.signal_NodePreDeleted.emit([nodeName])
+
             node._remove()
 
             # Emit signal.
@@ -1100,6 +1112,7 @@ class Nodz(QtWidgets.QGraphicsView):
                         nodesMovedList.append(node.name)
                         fromPosList.append(node.pos())
                         node.setPos(node_pos)
+                        node.checkIsWithinSceneRect()
                         # Emit signal.
                         self.signal_NodeMoved.emit(node.name, node.pos())
                         toPosList.append(node.pos())
@@ -1205,8 +1218,12 @@ class Nodz(QtWidgets.QGraphicsView):
                 socket = attrData['socket']
                 preset = attrData['preset']
                 dataType = attrData['dataType']
-                plugMaxConnections = attrData['plugMaxConnections']
-                socketMaxConnections = attrData['socketMaxConnections']
+                plugMaxConnections = 1 # default before plugMaxConnections
+                if ('plugMaxConnections' in attrData):
+                    plugMaxConnections = attrData['plugMaxConnections']
+                socketMaxConnections = -1 
+                if ('socketMaxConnections' in attrData):
+                    socketMaxConnections = attrData['socketMaxConnections']
 
                 # un-serialize data type if needed
                 if (isinstance(dataType, unicode) and dataType.find('<') == 0):
@@ -1795,21 +1812,35 @@ class NodeItem(QtWidgets.QGraphicsItem):
         Resize scene if node position is outside of the scene
 
         """
+        currentNodz = self.scene().parent()
+        config = currentNodz.config
+        baseResolution = [config["scene_width"], config["scene_height"]]
+        borderMarginRatio = config["scene_marginRatio"]
+       
         currentPos = self.pos()
         sceneRect = self.scene().sceneRect()
         rectHasChanged = False
-        borderMargin = 0.2 * self.baseWidth
-        if currentPos.x() - borderMargin< sceneRect.x():
-            sceneRect.setX( currentPos.x() - borderMargin )
+        
+        borderMarginWidth = (borderMarginRatio * baseResolution[0])
+        borderMarginHeight = (borderMarginRatio * baseResolution[1])
+        
+        if currentPos.x() - borderMarginWidth < sceneRect.x():
+            xBefore = sceneRect.x()
+            sceneRect.setX(currentPos.x() - borderMarginWidth)
+            xAfter = sceneRect.x()
+            sceneRect.setWidth(sceneRect.width() + (xBefore - xAfter))
             rectHasChanged = True
-        if currentPos.y() - borderMargin < sceneRect.y():
-            sceneRect.setY( currentPos.y() - borderMargin )
+        if currentPos.y() - borderMarginHeight < sceneRect.y():
+            yBefore = sceneRect.y()
+            sceneRect.setY(currentPos.y() - borderMarginHeight)
+            yAfter = sceneRect.y()
+            sceneRect.setHeight(sceneRect.height() + (yBefore - yAfter))
             rectHasChanged = True
-        if currentPos.x() + self.baseWidth  > sceneRect.x() + sceneRect.width():
-            sceneRect.setWidth( currentPos.x() + self.baseWidth + 2 * borderMargin - sceneRect.x())
+        if currentPos.x() + borderMarginWidth  > sceneRect.x() + sceneRect.width():
+            sceneRect.setWidth( currentPos.x() - sceneRect.x() +  borderMarginWidth )
             rectHasChanged = True
-        if currentPos.y() + self.height > sceneRect.y() + sceneRect.height():
-            sceneRect.setHeight( currentPos.y() + self.height + 2 * borderMargin - sceneRect.y())
+        if currentPos.y() + borderMarginHeight > sceneRect.y() + sceneRect.height():
+            sceneRect.setHeight( currentPos.y() - sceneRect.y() + borderMarginHeight )
             rectHasChanged = True            
 
         if rectHasChanged:
