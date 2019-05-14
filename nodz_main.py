@@ -192,6 +192,7 @@ class Nodz(QtWidgets.QGraphicsView):
               event.modifiers() == QtCore.Qt.AltModifier):
             self.currentState = 'DRAG_VIEW'
             self.prevPos = event.pos()
+            self.setDragMode(QtWidgets.QGraphicsView.ScrollHandDrag)
             self.setCursor(QtCore.Qt.ClosedHandCursor)
             self.setInteractive(False)
 
@@ -317,6 +318,9 @@ class Nodz(QtWidgets.QGraphicsView):
         Apply tablet zoom, dragging and selection.
 
         """
+
+        self.setDragMode(QtWidgets.QGraphicsView.NoDrag)
+
         # Zoom the View.
         if self.currentState == '.ZOOM_VIEW':
             self.offset = 0
@@ -1366,7 +1370,21 @@ class NodeScene(QtWidgets.QGraphicsScene):
         # General.
         self.gridSize = parent.config['grid_size']
 
+        map = QtGui.QPixmap(self.gridSize, self.gridSize)
+        gridBGColor = utils._convertDataToColor(parent.config['grid_background_color'])
+        map.fill(gridBGColor)
+        painter = QtGui.QPainter()
+        painter.begin(map)
+        gridColor = utils._convertDataToColor(parent.config['grid_color'])
+        painter.setPen(gridColor)
+        painter.drawRect(QtCore.QRectF(0, 0, self.gridSize, self.gridSize))
+        painter.end()
 
+        self.parent().setDragMode(QtWidgets.QGraphicsView.NoDrag)
+        # self.setDragMode(QtWidgets.QGraphicsView.NoDrag)
+
+        self.gridBrush = QtGui.QBrush()
+        self.gridBrush.setTexture(map)
 
         # Nodes storage.
         self.nodes = dict()
@@ -1404,26 +1422,55 @@ class NodeScene(QtWidgets.QGraphicsScene):
 
         """
         if self.views()[0].gridVisToggle:
-            leftLine = rect.left() - rect.left() % self.gridSize
-            topLine = rect.top() - rect.top() % self.gridSize
-            lines = list()
 
-            i = int(leftLine)
-            while i < int(rect.right()):
-                lines.append(QtCore.QLineF(i, rect.top(), i, rect.bottom()))
-                i += self.gridSize
+            nodzInst = self.parent()
 
-            u = int(topLine)
-            while u < int(rect.bottom()):
-                lines.append(QtCore.QLineF(rect.left(), u, rect.right(), u))
-                u += self.gridSize
+            painter.save()
+            backgroundRect = QtCore.QRectF(nodzInst.viewport().rect())
+            
+            painterTransform = painter.transform()
+            painter.resetTransform()
 
-            self.pen = QtGui.QPen()
-            config = self.parent().config
-            self.pen.setColor(utils._convertDataToColor(config['grid_color']))
-            self.pen.setWidth(0)
-            painter.setPen(self.pen)
-            painter.drawLines(lines)
+            painterTranslation = QtCore.QPointF( painterTransform.dx(), painterTransform.dy() )
+
+            # Translate the painter during the scrollHandDrag mode only. Note : Glitches when starting zooming
+            if( nodzInst.dragMode() == QtWidgets.QGraphicsView.ScrollHandDrag ): 
+                painter.translate( painterTranslation )
+                backgroundRect.translate( -painterTranslation )
+
+            painter.fillRect(backgroundRect, self.gridBrush)
+
+            painter.restore()
+
+            # nodzInst = self.parent() #.views()[0]
+            # # config = nodzInst.config
+
+            # viewport_rect = QtCore.QRect(
+            #     0, 0, nodzInst.viewport().width(), nodzInst.viewport().height())
+            # visible_scene_rect = nodzInst.mapToScene(viewport_rect).boundingRect()
+            
+            # gridSize = self.gridSize * visible_scene_rect.width() / viewport_rect.width()
+
+            # leftLine = rect.left() - rect.left() % gridSize
+            # topLine = rect.top() - rect.top() % gridSize
+            # lines = list()
+
+            # i = int(leftLine)
+            # while i < int(rect.right()):
+            #     lines.append(QtCore.QLineF(i, rect.top(), i, rect.bottom()))
+            #     i += gridSize
+
+            # u = int(topLine)
+            # while u < int(rect.bottom()):
+            #     lines.append(QtCore.QLineF(rect.left(), u, rect.right(), u))
+            #     u += gridSize
+
+            # self.pen = QtGui.QPen()
+            # config = self.parent().config
+            # self.pen.setColor(utils._convertDataToColor(config['grid_color']))
+            # self.pen.setWidth(0)
+            # painter.setPen(self.pen)
+            # painter.drawLines(lines)
 
     def updateScene(self):
         """
@@ -1929,17 +1976,22 @@ class NodeItem(QtWidgets.QGraphicsItem):
                                 text_width,
                                 text_height)
 
-        painter.drawText(textRect,
-                         QtCore.Qt.AlignCenter,
-                         self.name)
+        nodzInst = self.scene().views()[0]
+        config = nodzInst.config
 
+        viewport_rect = QtCore.QRect(0, 0, nodzInst.viewport().width(), nodzInst.viewport().height())
+        visible_scene_rect = nodzInst.mapToScene(viewport_rect).boundingRect()
+        nodeSizeInScreenPixels = self.baseWidth * viewport_rect.width() / visible_scene_rect.width()
+
+        if (nodeSizeInScreenPixels > 40):
+            painter.drawText(textRect,
+                            QtCore.Qt.AlignCenter,
+                            self.name)
 
         # Attributes.
         offset = 0
         for attr in self.attrs:
-            nodzInst = self.scene().views()[0]
-            config = nodzInst.config
-
+            
             # Attribute rect.
             rect = QtCore.QRect(self.border / 2,
                                 self.baseHeight - self.radius + offset,
@@ -1984,7 +2036,9 @@ class NodeItem(QtWidgets.QGraphicsItem):
                                      rect.top(),
                                      rect.width() - 2*self.radius,
                                      rect.height())
-            painter.drawText(textRect, self._attrVAlign, name)
+           
+            if (nodeSizeInScreenPixels > 60):
+                painter.drawText(textRect, self._attrVAlign, name)
 
             offset += self.attrHeight
 
@@ -2017,8 +2071,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
             if (self.attributeBeingPlugged is not None):
                 self.attributeBeingPlugged.mousePressEvent(event)
         else:
-            self.lastMousePressPos = self.pos()
             super(NodeItem, self).mousePressEvent(event)
+            self.lastMousePressPos = self.pos() # take position after potential node selection / edition which may change the layout
 
     def mouseDoubleClickEvent(self, event):
         """
@@ -2095,44 +2149,45 @@ class NodeItem(QtWidgets.QGraphicsItem):
         nodzInst = self.scene().views()[0]
         if(event.button() == QtCore.Qt.MouseButton.LeftButton):
 
-            self.scene().signal_NodeMoved.emit(self.name, self.pos())
-            
-            nodesMovedList = [self.name]
-            fromPosList = [self.lastMousePressPos]
-            toPosList = [self.pos()]
-            # nodesMovedList.append(self)
-            # fromPosList.append()
-            # toPosList.append(self.pos())
+            if (self.lastMousePressPos != self.pos()):
+                self.scene().signal_NodeMoved.emit(self.name, self.pos())
+                
+                nodesMovedList = [self.name]
+                fromPosList = [self.lastMousePressPos]
+                toPosList = [self.pos()]
+                # nodesMovedList.append(self)
+                # fromPosList.append()
+                # toPosList.append(self.pos())
 
-            # print("move node {} from {} to {}".format(self.name, self.lastMousePressPos, self.pos()))
+                # print("move node {} from {} to {}".format(self.name, self.lastMousePressPos, self.pos()))
 
-            nodzInst.signal_UndoRedoMoveNodes.emit(nodzInst, nodesMovedList, fromPosList, toPosList)
+                nodzInst.signal_UndoRedoMoveNodes.emit(nodzInst, nodesMovedList, fromPosList, toPosList)
 
-            #handle connection if dropped an unconnected "pass through" node on a link
-            if nodzInst.currentHoveredLink is not None:    
-                fromNode = nodzInst.currentHoveredLink.plugNode
-                fromAttr = nodzInst.currentHoveredLink.plugAttr
-                toNode = nodzInst.currentHoveredLink.socketNode
-                toAttr = nodzInst.currentHoveredLink.socketAttr
+                #handle connection if dropped an unconnected "pass through" node on a link
+                if nodzInst.currentHoveredLink is not None:    
+                    fromNode = nodzInst.currentHoveredLink.plugNode
+                    fromAttr = nodzInst.currentHoveredLink.plugAttr
+                    toNode = nodzInst.currentHoveredLink.socketNode
+                    toAttr = nodzInst.currentHoveredLink.socketAttr
 
-                theNodePlugAttr = self.plugs.itervalues().next().attribute
-                theNodeSocketAttr = self.sockets.itervalues().next().attribute
+                    theNodePlugAttr = self.plugs.itervalues().next().attribute
+                    theNodeSocketAttr = self.sockets.itervalues().next().attribute
 
-                removedConnections = list()
-                addedConnections = list()
+                    removedConnections = list()
+                    addedConnections = list()
 
-                # pack the layout update call in a single call
-                nodzInst.signal_StartCompoundInteraction.emit(nodzInst)
-                removedConnections.append(ConnectionInfo(nodzInst.currentHoveredLink))
-                nodzInst.currentHoveredLink._remove()
+                    # pack the layout update call in a single call
+                    nodzInst.signal_StartCompoundInteraction.emit(nodzInst)
+                    removedConnections.append(ConnectionInfo(nodzInst.currentHoveredLink))
+                    nodzInst.currentHoveredLink._remove()
 
-                addedConnections.append(ConnectionInfo(nodzInst.createConnection(fromNode, fromAttr, self.name, theNodeSocketAttr)))
-                addedConnections.append(ConnectionInfo(nodzInst.createConnection(self.name, theNodePlugAttr, toNode, toAttr)))
+                    addedConnections.append(ConnectionInfo(nodzInst.createConnection(fromNode, fromAttr, self.name, theNodeSocketAttr)))
+                    addedConnections.append(ConnectionInfo(nodzInst.createConnection(self.name, theNodePlugAttr, toNode, toAttr)))
 
-                nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)
+                    nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)
 
-                nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
-            
+                    nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
+                
         elif(event.button() == QtCore.Qt.MouseButton.MiddleButton):
             if (self.attributeBeingPlugged is not None):
                 self.attributeBeingPlugged.mouseReleaseEvent(event)
