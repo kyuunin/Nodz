@@ -179,7 +179,7 @@ class Nodz(QtWidgets.QGraphicsView):
         """
         # Tablet zoom
         if (event.button() == QtCore.Qt.RightButton and
-            event.modifiers() == QtCore.Qt.AltModifier):
+            (event.modifiers() & QtCore.Qt.AltModifier)):
             self.currentState = 'ZOOM_VIEW'
             self.initMousePos = event.pos()
             self.zoomInitialPos = event.pos()
@@ -189,7 +189,7 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # Drag view
         elif (event.button() == QtCore.Qt.MiddleButton and
-              event.modifiers() == QtCore.Qt.AltModifier):
+              (event.modifiers() & QtCore.Qt.AltModifier)):
             self.currentState = 'DRAG_VIEW'
             self.prevPos = event.pos()
             self.setDragMode(QtWidgets.QGraphicsView.ScrollHandDrag)
@@ -199,7 +199,7 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # Rubber band selection
         elif (event.button() == QtCore.Qt.LeftButton and
-              event.modifiers() == QtCore.Qt.NoModifier and
+             (event.modifiers() & QtCore.Qt.NoModifier) and
               self.scene().itemAt(self.mapToScene(event.pos()), QtGui.QTransform()) is None):
             self.currentState = 'SELECTION'
             self._initRubberband(event.pos())
@@ -207,15 +207,15 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # Drag Item
         elif (event.button() == QtCore.Qt.LeftButton and
-              event.modifiers() == QtCore.Qt.NoModifier and
+              (event.modifiers() & QtCore.Qt.NoModifier) and
               isinstance(self.scene().itemAt(self.mapToScene(event.pos()), QtGui.QTransform()), NodeItem)):
             self.currentState = 'DRAG_ITEM'
             self.setInteractive(True)
 
         # Add selection
         elif (event.button() == QtCore.Qt.LeftButton and
-              QtCore.Qt.Key_Shift in self.pressedKeys and
-              QtCore.Qt.Key_Control in self.pressedKeys):
+              (event.modifiers() & QtCore.Qt.ShiftModifier) and
+              (event.modifiers() & QtCore.Qt.ControlModifier)):
             self.currentState = 'ADD_SELECTION'
             self._initRubberband(event.pos())
             self.setInteractive(False)
@@ -223,7 +223,7 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # Subtract selection
         elif (event.button() == QtCore.Qt.LeftButton and
-              event.modifiers() == QtCore.Qt.ControlModifier):
+              (event.modifiers() & QtCore.Qt.ControlModifier)):
             self.currentState = 'SUBTRACT_SELECTION'
             self._initRubberband(event.pos())
             self.setInteractive(False)
@@ -231,14 +231,14 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # Toggle selection
         elif (event.button() == QtCore.Qt.LeftButton and
-              event.modifiers() == QtCore.Qt.ShiftModifier):
+              (event.modifiers() & QtCore.Qt.ShiftModifier)):
             self.currentState = 'TOGGLE_SELECTION'
             self._initRubberband(event.pos())
             self.setInteractive(False)
 
         # Cut tool Golaem
         elif (event.button() == QtCore.Qt.LeftButton and
-              event.modifiers() == QtCore.Qt.AltModifier and
+              (event.modifiers() & QtCore.Qt.AltModifier) and
               self.scene().itemAt(self.mapToScene(event.pos()), QtGui.QTransform()) is None):
             self.currentState = 'CUT_LINK'
             self._initCutTool(event.pos())            
@@ -2111,7 +2111,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
             nodzInst = self.scene().views()[0]
             config = nodzInst.config
            
-            if event.modifiers() == QtCore.Qt.AltModifier:
+            if event.modifiers() & QtCore.Qt.AltModifier:
                 self._disconnectAll()
 
             # Handle drop on link : highlight currently selected link if any, and only if nodeItem is a pass through (1 in 1 out)
