@@ -165,6 +165,9 @@ class Nodz(QtWidgets.QGraphicsView):
         self.currentState = 'DEFAULT'
 
     def contextMenuEvent(self, event):
+        if event.modifiers() & QtCore.Qt.AltModifier or event.modifiers() & QtCore.Qt.ControlModifier:
+            return
+
         p=event.pos()
         item=self.itemAt(p.x(),p.y())
         if item is not None:
@@ -327,7 +330,6 @@ class Nodz(QtWidgets.QGraphicsView):
             self.zoomDirection = 0
             self.zoomIncr = 0
             self.setInteractive(True)
-
 
         # Drag View.
         elif self.currentState == 'DRAG_VIEW':
