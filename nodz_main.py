@@ -96,7 +96,7 @@ class Nodz(QtWidgets.QGraphicsView):
         self.currentHoveredAttribute = None
         self.currentHoveredLink = None
         self.sourceSlot = None
-        self.allowLoop = True        
+        self.allowLoop = True
 
         # Display options.
         self.currentState = 'DEFAULT'
@@ -122,21 +122,21 @@ class Nodz(QtWidgets.QGraphicsView):
         if self.dragAccept:
             e.accept()
         else:
-            e.ignore() 
+            e.ignore()
 
-    def dragMoveEvent(self, e):  
+    def dragMoveEvent(self, e):
         self.signal_dragMoveEvent.emit(e, self)
         if self.dragMoveAccept:
             e.accept()
         else:
-            e.ignore() 
+            e.ignore()
 
-    def dropEvent(self, e):    
+    def dropEvent(self, e):
         self.signal_dropEvent.emit(e, self)
-        if self.dropAccept:        
+        if self.dropAccept:
             e.accept()
         else:
-            e.ignore() 
+            e.ignore()
 
     def event(self, event):
         if (event.type() == QtCore.QEvent.KeyPress):    # bypass QWidget behaviors which is to checks for Tab and Shift+Tab and tries to move the focus appropriately
@@ -144,7 +144,7 @@ class Nodz(QtWidgets.QGraphicsView):
             return True
 
         return super(Nodz, self).event(event)
-    
+
     def wheelEvent(self, event):
         """
         Zoom in the view with the mouse wheel.
@@ -244,9 +244,9 @@ class Nodz(QtWidgets.QGraphicsView):
               (event.modifiers() & QtCore.Qt.AltModifier) and
               self.scene().itemAt(self.mapToScene(event.pos()), QtGui.QTransform()) is None):
             self.currentState = 'CUT_LINK'
-            self._initCutTool(event.pos())            
+            self._initCutTool(event.pos())
             self.setCursor(QtCore.Qt.CrossCursor)
-            self.setInteractive(True)            
+            self.setInteractive(True)
 
         else:
             self.currentState = 'DEFAULT'
@@ -393,9 +393,9 @@ class Nodz(QtWidgets.QGraphicsView):
                     removedConnections.append(ConnectionInfo(item))
                     item._remove()
             self.setCursor(QtCore.Qt.ArrowCursor)
-            
+
             if len(removedConnections) > 0:
-                self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)            
+                self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
 
         self.currentState = 'DEFAULT'
 
@@ -421,6 +421,10 @@ class Nodz(QtWidgets.QGraphicsView):
 
         if event.key() == QtCore.Qt.Key_F:
             self._focus()
+
+        if event.key() == QtCore.Qt.Key_A:
+            itemsArea = self.scene().itemsBoundingRect()
+            self.fitInView(itemsArea, QtCore.Qt.KeepAspectRatio)
 
         if event.key() == QtCore.Qt.Key_S:
             self._nodeSnap = True
@@ -570,10 +574,10 @@ class Nodz(QtWidgets.QGraphicsView):
             if type(node) is NodeItem:
                 #NodeItem
                 selected_nodes.append(node.name)
-        
+
         if len(selected_nodes) > 0:
             self.signal_NodePreDeleted.emit(selected_nodes)
-         
+
         for node in self.scene().selectedItems():
             if type(node) is NodeItem:
                 #NodeItem
@@ -583,7 +587,7 @@ class Nodz(QtWidgets.QGraphicsView):
                     for socket in node.sockets.values():
                         for iCon in range(0, len(socket.connections)):
                             removedConnections.append(ConnectionInfo(socket.connections[iCon]))
-                    
+
                     # stack all plugs connections.
                     for plug in node.plugs.values():
                         for iCon in range(0, len(plug.connections)):
@@ -623,7 +627,7 @@ class Nodz(QtWidgets.QGraphicsView):
             for node in self.scene().selectedItems():
                 if type(node) is NodeItem:
                     self.selectedNodes.append(node.name)
-        
+
         # Emit signal.
         self.signal_NodeSelected.emit(self.selectedNodes)
 
@@ -664,7 +668,7 @@ class Nodz(QtWidgets.QGraphicsView):
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.rubberband = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle, self)
-              
+
         # Setup scene.
         scene = NodeScene(self)
         sceneWidth = config['scene_width']
@@ -773,13 +777,13 @@ class Nodz(QtWidgets.QGraphicsView):
                 if len(socket.connections)>0:
                     for socketConnection in socket.connections:
                         removedConnections.append(ConnectionInfo(socketConnection))
-            
+
             # stack all plugs connections.
             for plug in node.plugs.values():
                 if len(plug.connections)>0:
                     for plugConnection in plug.connections:
                         removedConnections.append(ConnectionInfo(plugConnection))
-            
+
             self.signal_NodePreDeleted.emit([nodeName])
 
             node._remove()
@@ -817,7 +821,7 @@ class Nodz(QtWidgets.QGraphicsView):
                 #oldName = node.name
 
                 node.name = newName
-                
+
                 # Replace node data.
                 self.scene().nodes[newName] = self.scene().nodes[oldName]
                 self.scene().nodes.pop(oldName)
@@ -834,7 +838,7 @@ class Nodz(QtWidgets.QGraphicsView):
                             connection.plugNode = newName
 
                 node.update()
-                
+
                 # Emit signal.
                 self.signal_NodeEdited.emit(oldName, newName)
                 # editNode ot used in golaem, else needs an event
@@ -1031,13 +1035,13 @@ class Nodz(QtWidgets.QGraphicsView):
                     isRoot &= (len(plug.connections)==0)
                 if isRoot:
                     rootNodes.append(node)
-        
+
         maxGraphWidth = 0
         rootGraphs = [[[0 for _x in range(0)] for _y in range(0)] for _z in range(0)]
         for rootNode in rootNodes:
             rootGraph = [[0 for _x in range(0)] for _y in range(0)]
             rootGraph.append([rootNode])
-            
+
             currentGraphLevel = 0
             doNextGraphLevel = True
             while(doNextGraphLevel):
@@ -1101,7 +1105,7 @@ class Nodz(QtWidgets.QGraphicsView):
                         if node_pos.x() + nodeWidth > self.scene().width():
                             sceneRect.setWidth(node_pos.x() + nodeWidth + margin)
                             shouldResize = True
-                        if node_pos.y() < node.height : 
+                        if node_pos.y() < node.height :
                             sceneRect.setHeight(self.scene().height() - node_pos.y() + node.height + margin)
                             node_pos.setY(node.height + margin)
                             shouldResize = True
@@ -1227,7 +1231,7 @@ class Nodz(QtWidgets.QGraphicsView):
                 plugMaxConnections = 1 # default before plugMaxConnections
                 if ('plugMaxConnections' in attrData):
                     plugMaxConnections = attrData['plugMaxConnections']
-                socketMaxConnections = -1 
+                socketMaxConnections = -1
                 if ('socketMaxConnections' in attrData):
                     socketMaxConnections = attrData['socketMaxConnections']
 
@@ -1273,7 +1277,7 @@ class Nodz(QtWidgets.QGraphicsView):
 
     def removeConnectionByInfo(self, connectionInfo):
         for item in self.scene().items():
-            if (isinstance(item, ConnectionItem)):   
+            if (isinstance(item, ConnectionItem)):
                 if (item.plugNode == connectionInfo.plugNode and item.plugAttr == connectionInfo.plugAttr and item.socketNode == connectionInfo.socketNode and item.socketAttr == connectionInfo.socketAttr):
                     item._remove()
 
@@ -1344,7 +1348,7 @@ class Nodz(QtWidgets.QGraphicsView):
         """
         self.cutTool = None
         self.scene().clear()
-        self.scene().nodes = dict()        
+        self.scene().nodes = dict()
 
         # Emit signal.
         self.signal_GraphCleared.emit()
@@ -1429,14 +1433,14 @@ class NodeScene(QtWidgets.QGraphicsScene):
 
             painter.save()
             backgroundRect = QtCore.QRectF(nodzInst.viewport().rect())
-            
+
             painterTransform = painter.transform()
             painter.resetTransform()
 
             painterTranslation = QtCore.QPointF( painterTransform.dx(), painterTransform.dy() )
 
             # Translate the painter during the scrollHandDrag mode only. Note : Glitches when starting zooming
-            if( nodzInst.dragMode() == QtWidgets.QGraphicsView.ScrollHandDrag ): 
+            if( nodzInst.dragMode() == QtWidgets.QGraphicsView.ScrollHandDrag ):
                 painter.translate( painterTranslation )
                 backgroundRect.translate( -painterTranslation )
 
@@ -1450,7 +1454,7 @@ class NodeScene(QtWidgets.QGraphicsScene):
             # viewport_rect = QtCore.QRect(
             #     0, 0, nodzInst.viewport().width(), nodzInst.viewport().height())
             # visible_scene_rect = nodzInst.mapToScene(viewport_rect).boundingRect()
-            
+
             # gridSize = self.gridSize * visible_scene_rect.width() / viewport_rect.width()
 
             # leftLine = rect.left() - rect.left() % gridSize
@@ -1741,14 +1745,14 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 if (connection.target is not None and connection.source is not None):
                     connection.target_point = connection.target.center()
                     connection.source_point = connection.source.center()
-                    connection.updatePath()        
+                    connection.updatePath()
 
         for socket in self.sockets.values():
             for connection in socket.connections:
                 if (connection.target is not None and connection.source is not None):
                     connection.target_point = connection.target.center()
                     connection.source_point = connection.source.center()
-                    connection.updatePath()        
+                    connection.updatePath()
 
     def _disconnectAll(self):
         """
@@ -1757,7 +1761,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         """
         #reconnect if only one in and one out
         removedConnections = list()
-        addedConnections = list()        
+        addedConnections = list()
 
         nodzInst = self.scene().views()[0]
 
@@ -1773,7 +1777,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                     if socket.connections[iCon].plugNode not in nodzInst.selectedNodes:
                         selectionPlugConnectionItems.append(socket.connections[iCon])
                         removedConnections.append(ConnectionInfo(socket.connections[iCon]))
-                    
+
 
             for plug in self.scene().nodes[selectedNode].plugs.values(): # Remove all plugs connections.
                 for iCon in range(0, len(plug.connections)):
@@ -1782,7 +1786,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                         removedConnections.append(ConnectionInfo(plug.connections[iCon]))
 
         if len(selectionPlugConnectionItems) == 1 and len(selectionSocketConnectionItems) == 1:
-            plugItem = selectionPlugConnectionItems[0].plugItem 
+            plugItem = selectionPlugConnectionItems[0].plugItem
             socketItem = selectionSocketConnectionItems[0].socketItem
 
             # link previous plug to next socket
@@ -1821,7 +1825,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
             nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)
         else:
             nodzInst.signal_EndCompoundInteraction.emit(nodzInst, False)
-    
+
     def _remove(self):
         """
         Remove this node instance from the scene.
@@ -1865,14 +1869,14 @@ class NodeItem(QtWidgets.QGraphicsItem):
         config = currentNodz.config
         baseResolution = [config["scene_width"], config["scene_height"]]
         borderMarginRatio = config["scene_marginRatio"]
-       
+
         currentPos = self.pos()
         sceneRect = self.scene().sceneRect()
         rectHasChanged = False
-        
+
         borderMarginWidth = (borderMarginRatio * baseResolution[0])
         borderMarginHeight = (borderMarginRatio * baseResolution[1])
-        
+
         if currentPos.x() - borderMarginWidth < sceneRect.x():
             xBefore = sceneRect.x()
             sceneRect.setX(currentPos.x() - borderMarginWidth)
@@ -1890,20 +1894,20 @@ class NodeItem(QtWidgets.QGraphicsItem):
             rectHasChanged = True
         if currentPos.y() + borderMarginHeight > sceneRect.y() + sceneRect.height():
             sceneRect.setHeight( currentPos.y() - sceneRect.y() + borderMarginHeight )
-            rectHasChanged = True            
+            rectHasChanged = True
 
         if rectHasChanged:
             self.scene().setSceneRect(sceneRect)
             self.updateNodeConnectionsPath()
-        
+
     def getAttributeAtPos(self, scenePos):
         """
-        return the attribute plug 
+        return the attribute plug
         """
         #check that scenePos x is in node range :
         yPos = scenePos.y() - self.pos().y()
         if (yPos <= 0 or yPos > self.height):
-            return None             
+            return None
         yPos = yPos - self.baseHeight + self.radius
         # if (yPos > 0): take banner as first attribute (easier to click for layout)
         yPos /= self.attrHeight
@@ -1993,7 +1997,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         # Attributes.
         offset = 0
         for attr in self.attrs:
-            
+
             # Attribute rect.
             rect = QtCore.QRect(self.border / 2,
                                 self.baseHeight - self.radius + offset,
@@ -2038,7 +2042,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                                      rect.top(),
                                      rect.width() - 2*self.radius,
                                      rect.height())
-           
+
             if (nodeSizeInScreenPixels > 60):
                 painter.drawText(textRect, self._attrVAlign, name)
 
@@ -2112,7 +2116,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
             # Moving the node : is there a connectionItem around there to plug ourself
             nodzInst = self.scene().views()[0]
             config = nodzInst.config
-           
+
             if event.modifiers() & QtCore.Qt.AltModifier:
                 self._disconnectAll()
 
@@ -2126,7 +2130,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 if (len(plugConnections) == 0 and len(socketConnections) == 0):
                     mbb = utils._createPointerBoundingBox(pointerPos=event.scenePos().toPoint(),bbSize=config['mouse_bounding_box'])
                     hoveredItems = self.scene().items(mbb)
-                    lowestDistance2 = 10000000000 
+                    lowestDistance2 = 10000000000
                     for hoveredItem in hoveredItems:
                         if (isinstance(hoveredItem, ConnectionItem)):
                             # Check that link accepts plug-nodeSocket and nodePlug-socket connections
@@ -2153,7 +2157,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
             if (self.lastMousePressPos != self.pos()):
                 self.scene().signal_NodeMoved.emit(self.name, self.pos())
-                
+
                 nodesMovedList = [self.name]
                 fromPosList = [self.lastMousePressPos]
                 toPosList = [self.pos()]
@@ -2166,7 +2170,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 nodzInst.signal_UndoRedoMoveNodes.emit(nodzInst, nodesMovedList, fromPosList, toPosList)
 
                 #handle connection if dropped an unconnected "pass through" node on a link
-                if nodzInst.currentHoveredLink is not None:    
+                if nodzInst.currentHoveredLink is not None:
                     fromNode = nodzInst.currentHoveredLink.plugNode
                     fromAttr = nodzInst.currentHoveredLink.plugAttr
                     toNode = nodzInst.currentHoveredLink.socketNode
@@ -2189,7 +2193,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                     nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)
 
                     nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
-                
+
         elif(event.button() == QtCore.Qt.MouseButton.MiddleButton):
             if (self.attributeBeingPlugged is not None):
                 self.attributeBeingPlugged.mouseReleaseEvent(event)
@@ -2203,8 +2207,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 theNodeSocketAttr = self.sockets.itervalues().next()().key()
 
                 removedConnections = list()
-                addedConnections = list()                
-                   
+                addedConnections = list()
+
                 removedConnections.append(ConnectionInfo(nodzInst.currentHoveredLink))
                 nodzInst.currentHoveredLink._remove()
 
@@ -2212,13 +2216,13 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 addedConnections.append(ConnectionInfo(nodzInst.createConnection(self, theNodePlugAttr, toNode, toAttr)))
 
                 nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
-                
+
         # if(event.button() == QtCore.Qt.MouseButton.RightButton):
         #     self.scene().parent().signal_NodeRightClicked.emit(self.name)
 
         nodzInst.currentHoveredLink = None
 
-        self.attributeBeingPlugged = None            
+        self.attributeBeingPlugged = None
 
         super(NodeItem, self).mouseReleaseEvent(event)
 
@@ -2339,7 +2343,7 @@ class SlotItem(QtWidgets.QGraphicsItem):
                 # del nodesToProcess[:]
             if not validConnection:
                 print "This Connection would make a loop, this is forbidden"
-                return            
+                return
 
         #otherwize, all fine.
         return True
@@ -2428,9 +2432,9 @@ class SlotItem(QtWidgets.QGraphicsItem):
                 target.connect(self, self.newConnection)
 
                 self.newConnection.updatePath()
-                
+
                 removedConnections = list()
-                addedConnections = list()                
+                addedConnections = list()
                 addedConnections.append(ConnectionInfo(self.newConnection))
                 nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
 
@@ -2589,7 +2593,7 @@ class PlugItem(SlotItem):
         """
         Disconnect the given connection from this plug item.
 
-        """        
+        """
         # Emit signal.
         nodzInst = self.scene().views()[0]
 
@@ -2807,7 +2811,7 @@ class ConnectionItem(QtWidgets.QGraphicsPathItem):
 
         self._pen = QtGui.QPen(utils._convertDataToColor(config['connection_color']))
         self._pen.setWidth(config['connection_width'])
-        
+
         # make link selectable + selection style
         self._penSel = QtGui.QPen(utils._convertDataToColor(config['connection_sel_color']))
         self._penSel.setWidth(config['connection_sel_width'])
