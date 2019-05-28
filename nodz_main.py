@@ -202,7 +202,7 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # Rubber band selection
         elif (event.button() == QtCore.Qt.LeftButton and
-             (event.modifiers() & QtCore.Qt.NoModifier) and
+             (event.modifiers() == QtCore.Qt.NoModifier) and
               self.scene().itemAt(self.mapToScene(event.pos()), QtGui.QTransform()) is None):
             self.currentState = 'SELECTION'
             self._initRubberband(event.pos())
@@ -210,7 +210,7 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # Drag Item
         elif (event.button() == QtCore.Qt.LeftButton and
-              (event.modifiers() & QtCore.Qt.NoModifier) and
+              (event.modifiers() == QtCore.Qt.NoModifier) and
               isinstance(self.scene().itemAt(self.mapToScene(event.pos()), QtGui.QTransform()), NodeItem)):
             self.currentState = 'DRAG_ITEM'
             self.setInteractive(True)
