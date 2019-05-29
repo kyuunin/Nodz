@@ -35,7 +35,9 @@ class Nodz(QtWidgets.QGraphicsView):
     # # signal_UndoRedoEditNodeName = QtCore.Signal(object, str, str) # node name before, node name after UNUSED
     signal_UndoRedoAddNode = QtCore.Signal(object, object) # node added user data. For consistency with signal_UndoRedoDeleteSelectedNodes (we may actually store undo via signal_NodeCreated, but would be called a lot of time from loadGraph)
     signal_UndoRedoMoveNodes = QtCore.Signal(object, object, object, object) # node name list, fromPos list, toPos list. signal_NodeMoved does not send previous position
-    signal_UndoRedoConnectNodes = QtCore.Signal(object, object, object) # list of removed ConnectionInfo (potentially due to addition), list of new ConnectionInfo. Could deal with it with plug/socket connected / disconnected but would be tedious with a lot of calls
+    signal_UndoRedoConnectNodes = QtCore.Signal(object, object, object)  # list of removed ConnectionInfo (potentially due to addition), list of new ConnectionInfo. Could deal with it with plug/socket connected / disconnected but would be tedious with a lot of calls
+    
+    signal_dropOnNode = QtCore.Signal(object, object) #nodzInst, nodeItem
 
     signal_StartCompoundInteraction = QtCore.Signal(object) # starts user interaction on a nodz
     signal_EndCompoundInteraction = QtCore.Signal(object, bool) # end user interaction on a nodz
@@ -92,7 +94,8 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # Connections data.
         self.drawingConnection = False
-        self.currentHoveredNode = None
+        self.currentHoveredNodeForConnection = None
+        self.currentHoveredNodeForDrop = None
         self.currentHoveredAttribute = None
         self.currentHoveredLink = None
         self.sourceSlot = None
@@ -1536,6 +1539,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
         self.attributeBeingPlugged = None
         self.lastMousePressPos = None
+        self.acceptNodeDrop = False
 
         # Methods.
         self._createStyle(config)
@@ -1561,8 +1565,11 @@ class NodeItem(QtWidgets.QGraphicsItem):
         Return the pen based on the selection state of the node.
 
         """
+        nodzInst = self.scene().views()[0]
         if self.isSelected():
             return self._penSel
+        elif self is nodzInst.currentHoveredNodeForDrop:
+            return self._penHover
         else:
             return self._pen
 
@@ -1599,6 +1606,12 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self._penSel.setStyle(QtCore.Qt.SolidLine)
         self._penSel.setWidth(self.border)
         self._penSel.setColor(utils._convertDataToColor(config[self.nodePreset]['border_sel']))
+
+        # make link highlit
+        self._penHover = QtGui.QPen()
+        self._penHover.setStyle(QtCore.Qt.SolidLine)
+        self._penHover.setWidth(self.border)
+        self._penHover.setColor(utils._convertDataToColor(config[self.nodePreset]['border_sel']))
 
         self._textPen = QtGui.QPen()
         self._textPen.setStyle(QtCore.Qt.SolidLine)
@@ -1851,6 +1864,17 @@ class NodeItem(QtWidgets.QGraphicsItem):
         scene.removeItem(self)
         scene.update()
 
+    def center(self):
+        """
+        Return The center of the Slot.
+
+        """
+        rect = self.boundingRect()
+        center = QtCore.QPointF(rect.x() + rect.width() * 0.5,
+                                rect.y() + rect.height() * 0.5)
+
+        return self.mapToScene(center)
+
     def boundingRect(self):
         """
         The bounding rect based on the width and height variables.
@@ -2031,7 +2055,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
             # Search non-connectable attributes.
             if nodzInst.drawingConnection:
-                if self == nodzInst.currentHoveredNode:
+                if self == nodzInst.currentHoveredNodeForConnection:
                     if (attrData['dataType'] != nodzInst.sourceSlot.dataType or
                         (nodzInst.sourceSlot.slotType == 'plug' and attrData['socket'] == False or
                          nodzInst.sourceSlot.slotType == 'socket' and attrData['plug'] == False)):
@@ -2144,6 +2168,20 @@ class NodeItem(QtWidgets.QGraphicsItem):
                                     lowestDistance2 = distance2
                                     nodzInst.currentHoveredLink = hoveredItem
 
+            nodzInst.currentHoveredNodeForDrop = None
+            mbb = utils._createPointerBoundingBox(pointerPos=event.scenePos().toPoint(),bbSize=config['mouse_bounding_box'])
+            hoveredItems = self.scene().items(mbb)
+            lowestDistance2 = 10000000000
+            for hoveredItem in hoveredItems:
+                if (hoveredItem is not self and isinstance(hoveredItem, NodeItem) and hoveredItem.acceptNodeDrop):
+                    fromScenePos = event.scenePos()
+                    toScenePos = hoveredItem.center()
+                    deltaPos = toScenePos - fromScenePos
+                    distance2 = deltaPos.x() * deltaPos.x() + deltaPos.y() * deltaPos.y()
+                    if (nodzInst.currentHoveredNodeForDrop is None or distance2 < lowestDistance2):
+                        lowestDistance2 = distance2
+                        nodzInst.currentHoveredNodeForDrop = hoveredItem
+                        
         self.checkIsWithinSceneRect()
 
     def mouseReleaseEvent(self, event):
@@ -2167,7 +2205,9 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
                 # print("move node {} from {} to {}".format(self.name, self.lastMousePressPos, self.pos()))
 
-                nodzInst.signal_UndoRedoMoveNodes.emit(nodzInst, nodesMovedList, fromPosList, toPosList)
+                # if currentHoveredNodeForDrop is not None, we drop node on other node : don't care about "moving" i
+                if nodzInst.currentHoveredNodeForDrop is None:
+                    nodzInst.signal_UndoRedoMoveNodes.emit(nodzInst, nodesMovedList, fromPosList, toPosList)
 
                 #handle connection if dropped an unconnected "pass through" node on a link
                 if nodzInst.currentHoveredLink is not None:
@@ -2193,6 +2233,9 @@ class NodeItem(QtWidgets.QGraphicsItem):
                     nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)
 
                     nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
+
+                if nodzInst.currentHoveredNodeForDrop is not None:
+                    nodzInst.signal_dropOnNode.emit(nodzInst, nodzInst.currentHoveredNodeForDrop.name) # can get back selection from nodzInst
 
         elif(event.button() == QtCore.Qt.MouseButton.MiddleButton):
             if (self.attributeBeingPlugged is not None):
@@ -2220,12 +2263,13 @@ class NodeItem(QtWidgets.QGraphicsItem):
         # if(event.button() == QtCore.Qt.MouseButton.RightButton):
         #     self.scene().parent().signal_NodeRightClicked.emit(self.name)
 
-        nodzInst.currentHoveredLink = None
-
         self.attributeBeingPlugged = None
 
-        super(NodeItem, self).mouseReleaseEvent(event)
+        if (nodzInst.currentHoveredNodeForDrop is None):
+            super(NodeItem, self).mouseReleaseEvent(event)
 
+        nodzInst.currentHoveredNodeForDrop = None
+        nodzInst.currentHoveredLink = None
         self.setZValue(self.baseZValue) #restore the base Z order (notes behind, other ndoes in front...)
 
     def hoverLeaveEvent(self, event):
@@ -2387,12 +2431,12 @@ class SlotItem(QtWidgets.QGraphicsItem):
                 if self.parentItem() not in targets:
                     for target in targets:
                         if isinstance(target, NodeItem):
-                            nodzInst.currentHoveredNode = target
+                            nodzInst.currentHoveredNodeForConnection = target
                             eventScenePos = self.mapToScene(event.pos())
-                            nodzInst.currentHoveredAttribute = nodzInst.currentHoveredNode.getAttributeAtPos(eventScenePos)
+                            nodzInst.currentHoveredAttribute = nodzInst.currentHoveredNodeForConnection.getAttributeAtPos(eventScenePos)
 
             else:
-                nodzInst.currentHoveredNode = None
+                nodzInst.currentHoveredNodeForConnection = None
                 nodzInst.currentHoveredAttribute = None
 
             # Set connection's end point.
@@ -2443,7 +2487,8 @@ class SlotItem(QtWidgets.QGraphicsItem):
         else:
             super(SlotItem, self).mouseReleaseEvent(event)
 
-        nodzInst.currentHoveredNode = None
+        nodzInst.currentHoveredNodeForConnection = None
+        nodzInst.currentHoveredNodeForDrop = None
         nodzInst.currentHoveredAttribute = None
         nodzInst.currentHoveredLink = None
 
@@ -2468,7 +2513,7 @@ class SlotItem(QtWidgets.QGraphicsItem):
         nodzInst = self.scene().views()[0]
         config = nodzInst.config
         if nodzInst.drawingConnection:
-            if self.parentItem() == nodzInst.currentHoveredNode:
+            if self.parentItem() == nodzInst.currentHoveredNodeForConnection:
                 # non connectable by type
                 painter.setBrush(utils._convertDataToColor(config['connection_color']))
                 if (self.slotType == nodzInst.sourceSlot.slotType or self.dataType != nodzInst.sourceSlot.dataType):
