@@ -1541,6 +1541,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.lastMousePressPos = None
         self.acceptNodeDrop = False
 
+        self.icon = None
+
         # Methods.
         self._createStyle(config)
 
@@ -2014,6 +2016,16 @@ class NodeItem(QtWidgets.QGraphicsItem):
         nodeSizeInScreenPixels = self.baseWidth * viewport_rect.width() / visible_scene_rect.width()
 
         if (nodeSizeInScreenPixels > 40):
+            if (self.icon is not None):
+                iconSize = 32
+                margin = 4
+                iconRect = QtCore.QRect(textRect.left() - (iconSize/2),
+                        textRect.top() - (iconSize + margin) + text_height,
+                        iconSize, iconSize)
+                self.icon.paint(painter, iconRect, QtCore.Qt.AlignCenter, QtGui.QIcon.Normal, QtGui.QIcon.On)
+               
+                textRect.setRect(textRect.left() + (iconSize/2), textRect.top() - (iconSize - text_height + margin) / 2, textRect.width(), textRect.height())
+
             painter.drawText(textRect,
                             QtCore.Qt.AlignCenter,
                             self.name)
@@ -2049,25 +2061,24 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
             painter.drawRect(rect)
 
-            # Attribute label.
-            painter.setPen(utils._convertDataToColor(config[preset]['text']))
-            painter.setFont(self._attrTextFont)
+            if (nodeSizeInScreenPixels > 60):            
+                painter.setPen(utils._convertDataToColor(config[preset]['text']))
+                painter.setFont(self._attrTextFont)
 
-            # Search non-connectable attributes.
-            if nodzInst.drawingConnection:
-                if self == nodzInst.currentHoveredNodeForConnection:
-                    if (attrData['dataType'] != nodzInst.sourceSlot.dataType or
-                        (nodzInst.sourceSlot.slotType == 'plug' and attrData['socket'] == False or
-                         nodzInst.sourceSlot.slotType == 'socket' and attrData['plug'] == False)):
-                        # Set non-connectable attributes color.
-                        painter.setPen(utils._convertDataToColor(config['non_connectable_color']))
+                # Search non-connectable attributes.
+                if nodzInst.drawingConnection:
+                    if self == nodzInst.currentHoveredNodeForConnection:
+                        if (attrData['dataType'] != nodzInst.sourceSlot.dataType or
+                            (nodzInst.sourceSlot.slotType == 'plug' and attrData['socket'] == False or
+                            nodzInst.sourceSlot.slotType == 'socket' and attrData['plug'] == False)):
+                            # Set non-connectable attributes color.
+                            painter.setPen(utils._convertDataToColor(config['non_connectable_color']))
 
-            textRect = QtCore.QRect(rect.left() + self.radius,
-                                     rect.top(),
-                                     rect.width() - 2*self.radius,
-                                     rect.height())
+                textRect = QtCore.QRect(rect.left() + self.radius,
+                                        rect.top(),
+                                        rect.width() - 2*self.radius,
+                                        rect.height())            
 
-            if (nodeSizeInScreenPixels > 60):
                 painter.drawText(textRect, self._attrVAlign, name)
 
             offset += self.attrHeight
