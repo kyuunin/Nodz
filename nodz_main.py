@@ -116,6 +116,8 @@ class Nodz(QtWidgets.QGraphicsView):
 
         self.cutTool = None
 
+        self.setRenderHints(QtGui.QPainter.Antialiasing | QtGui.QPainter.SmoothPixmapTransform | QtGui.QPainter.HighQualityAntialiasing)
+
     def setEnableDrop(self, enabled):
         self.setAcceptDrops(enabled)
         # self.setDropIndicatorShown(enabled)
@@ -1541,6 +1543,10 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.lastMousePressPos = None
         self.acceptNodeDrop = False
 
+        self.icon = None
+        self.scaledIcon = None
+        self.usingSquareDisplay = False
+
         # Methods.
         self._createStyle(config)
 
@@ -1551,13 +1557,14 @@ class NodeItem(QtWidgets.QGraphicsItem):
         is created.
 
         """
+        aHeight = self.baseHeight
         if self.attrCount > 0:
-            return (self.baseHeight +
-                    self.attrHeight * self.attrCount +
-                    self.border +
-                    0.5 * self.radius)
-        else:
-            return self.baseHeight
+            aHeight += self.attrHeight * self.attrCount + self.border + 0.5 * self.radius
+
+        if (self.usingSquareDisplay):
+            aHeight = max(self.baseWidth, aHeight)
+
+        return aHeight            
 
     @property
     def pen(self):
@@ -1987,11 +1994,28 @@ class NodeItem(QtWidgets.QGraphicsItem):
         painter.setBrush(self._brush)
         painter.setPen(self.pen)
 
+        nodzInst = self.scene().views()[0]
+        config = nodzInst.config
+
+        viewport_rect = QtCore.QRect(0, 0, nodzInst.viewport().width(), nodzInst.viewport().height())
+        visible_scene_rect = nodzInst.mapToScene(viewport_rect).boundingRect()
+        nodeSizeInScreenPixels = self.baseWidth * viewport_rect.width() / visible_scene_rect.width()
+
+        # displaying icon : 
+
+        attributesDisplayLimitPixOnScreen = config["attributes_display_limit"]     
+        titleDisplayLimitPixOnScreen = config["node_title_display_limit"]
+        big_icon_display_limit = config["big_icon_display_limit"]
+
+        if (nodeSizeInScreenPixels <= big_icon_display_limit):
+            self.usingSquareDisplay = True
+        else:
+            self.usingSquareDisplay = False
         painter.drawRoundedRect(0, 0,
                                 self.baseWidth,
                                 self.height,
                                 self.radius,
-                                self.radius)
+                                self.radius)            
 
         # Node label.
         painter.setPen(self._textPen)
@@ -2006,71 +2030,88 @@ class NodeItem(QtWidgets.QGraphicsItem):
                                 text_width,
                                 text_height)
 
-        nodzInst = self.scene().views()[0]
-        config = nodzInst.config
+        if (self.icon is not None):
+            if (nodeSizeInScreenPixels > big_icon_display_limit and nodeSizeInScreenPixels > titleDisplayLimitPixOnScreen):  # display beside the node title
+                iconSize = 32
+                margin = 4
+                iconRect = QtCore.QRect(textRect.left() - (iconSize/2),
+                        textRect.top() - (iconSize + margin) + text_height,
+                        iconSize, iconSize)
+                self.icon.paint(painter, iconRect, QtCore.Qt.AlignCenter, QtGui.QIcon.Normal, QtGui.QIcon.On)
+               
+                textRect.setRect(textRect.left() + (iconSize/2), textRect.top() - (iconSize - text_height + margin) / 2, textRect.width(), textRect.height())
 
-        viewport_rect = QtCore.QRect(0, 0, nodzInst.viewport().width(), nodzInst.viewport().height())
-        visible_scene_rect = nodzInst.mapToScene(viewport_rect).boundingRect()
-        nodeSizeInScreenPixels = self.baseWidth * viewport_rect.width() / visible_scene_rect.width()
+            elif (nodeSizeInScreenPixels < big_icon_display_limit):
+                iconSize = 128
+                if (self.scaledIcon is None):
+                    scaledPixmap2 = self.icon.pixmap(iconSize, iconSize).scaled(iconSize, iconSize, QtCore.Qt.KeepAspectRatio,  QtCore.Qt.SmoothTransformation)
+                    self.scaledIcon = QtGui.QIcon(scaledPixmap2)
 
-        if (nodeSizeInScreenPixels > 40):
+                # center on node attributes
+                iconRect = QtCore.QRect(0 + (self.baseWidth - iconSize)/2,
+                        0 + (self.baseWidth - iconSize)/2,
+                        iconSize, iconSize)
+                
+                self.scaledIcon.paint(painter, iconRect, QtCore.Qt.AlignCenter, QtGui.QIcon.Normal, QtGui.QIcon.On)
+                
+        if (nodeSizeInScreenPixels > titleDisplayLimitPixOnScreen):
             painter.drawText(textRect,
                             QtCore.Qt.AlignCenter,
                             self.name)
 
         # Attributes.
-        offset = 0
-        for attr in self.attrs:
+        if (nodeSizeInScreenPixels > big_icon_display_limit):
+            offset = 0
+            for attr in self.attrs:
 
-            # Attribute rect.
-            rect = QtCore.QRect(self.border / 2,
-                                self.baseHeight - self.radius + offset,
-                                self.baseWidth - self.border,
-                                self.attrHeight)
-
-
-
-            attrData = self.attrsData[attr]
-            name = attr
-
-            preset = attrData['preset']
+                # Attribute rect.
+                rect = QtCore.QRect(self.border / 2,
+                                    self.baseHeight - self.radius + offset,
+                                    self.baseWidth - self.border,
+                                    self.attrHeight)
 
 
-            # Attribute base.
-            self._attrBrush.setColor(utils._convertDataToColor(config[preset]['bg']))
-            if self.alternate:
-                self._attrBrushAlt.setColor(utils._convertDataToColor(config[preset]['bg'], True, config['alternate_value']))
 
-            self._attrPen.setColor(utils._convertDataToColor([0, 0, 0, 0]))
-            painter.setPen(self._attrPen)
-            painter.setBrush(self._attrBrush)
-            if (offset / self.attrHeight) % 2:
-                painter.setBrush(self._attrBrushAlt)
+                attrData = self.attrsData[attr]
+                name = attr
 
-            painter.drawRect(rect)
+                preset = attrData['preset']
 
-            # Attribute label.
-            painter.setPen(utils._convertDataToColor(config[preset]['text']))
-            painter.setFont(self._attrTextFont)
+                # Attribute base.
+                self._attrBrush.setColor(utils._convertDataToColor(config[preset]['bg']))
+                if self.alternate:
+                    self._attrBrushAlt.setColor(utils._convertDataToColor(config[preset]['bg'], True, config['alternate_value']))
 
-            # Search non-connectable attributes.
-            if nodzInst.drawingConnection:
-                if self == nodzInst.currentHoveredNodeForConnection:
-                    if (attrData['dataType'] != nodzInst.sourceSlot.dataType or
-                        (nodzInst.sourceSlot.slotType == 'plug' and attrData['socket'] == False or
-                         nodzInst.sourceSlot.slotType == 'socket' and attrData['plug'] == False)):
-                        # Set non-connectable attributes color.
-                        painter.setPen(utils._convertDataToColor(config['non_connectable_color']))
+                self._attrPen.setColor(utils._convertDataToColor([0, 0, 0, 0]))
+                painter.setPen(self._attrPen)
+                painter.setBrush(self._attrBrush)
+                if (offset / self.attrHeight) % 2:
+                    painter.setBrush(self._attrBrushAlt)
 
-            textRect = QtCore.QRect(rect.left() + self.radius,
-                                     rect.top(),
-                                     rect.width() - 2*self.radius,
-                                     rect.height())
+                painter.drawRect(rect)
 
-            if (nodeSizeInScreenPixels > 60):
-                painter.drawText(textRect, self._attrVAlign, name)
+                if (nodeSizeInScreenPixels > attributesDisplayLimitPixOnScreen):                
+            
+                    painter.setPen(utils._convertDataToColor(config[preset]['text']))
+                    painter.setFont(self._attrTextFont)
 
-            offset += self.attrHeight
+                    # Search non-connectable attributes.
+                    if nodzInst.drawingConnection:
+                        if self == nodzInst.currentHoveredNodeForConnection:
+                            if (attrData['dataType'] != nodzInst.sourceSlot.dataType or
+                                (nodzInst.sourceSlot.slotType == 'plug' and attrData['socket'] == False or
+                                nodzInst.sourceSlot.slotType == 'socket' and attrData['plug'] == False)):
+                                # Set non-connectable attributes color.
+                                painter.setPen(utils._convertDataToColor(config['non_connectable_color']))
+
+                    textRect = QtCore.QRect(rect.left() + self.radius,
+                                            rect.top(),
+                                            rect.width() - 2*self.radius,
+                                            rect.height())            
+
+                    painter.drawText(textRect, self._attrVAlign, name)
+
+                offset += self.attrHeight
 
     def contextMenuEvent(self, event):
         self.scene().parent().signal_NodeContextMenuEvent.emit(event, self.name)
