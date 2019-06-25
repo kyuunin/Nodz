@@ -101,6 +101,8 @@ class Nodz(QtWidgets.QGraphicsView):
         self.sourceSlot = None
         self.allowLoop = True
 
+        self.editEnabled = True
+
         # Display options.
         self.currentState = 'DEFAULT'
         self.pressedKeys = list()
@@ -119,32 +121,41 @@ class Nodz(QtWidgets.QGraphicsView):
         self.setRenderHints(QtGui.QPainter.Antialiasing | QtGui.QPainter.SmoothPixmapTransform | QtGui.QPainter.HighQualityAntialiasing)
 
     def setEnableDrop(self, enabled):
-        self.setAcceptDrops(enabled)
+        self.setAcceptDrops(enabled and self.editEnabled)
         # self.setDropIndicatorShown(enabled)
 
     def dragEnterEvent(self, e):
-        self.signal_dragEvent.emit(e, self)
-        if self.dragAccept:
-            e.accept()
+        if (self.editEnabled):
+            self.signal_dragEvent.emit(e, self)
+            if self.dragAccept:
+                e.accept()
+            else:
+                e.ignore()
         else:
             e.ignore()
 
     def dragMoveEvent(self, e):
-        self.signal_dragMoveEvent.emit(e, self)
-        if self.dragMoveAccept:
-            e.accept()
+        if (self.editEnabled):
+            self.signal_dragMoveEvent.emit(e, self)
+            if self.dragMoveAccept:
+                e.accept()
+            else:
+                e.ignore()
         else:
             e.ignore()
 
     def dropEvent(self, e):
-        self.signal_dropEvent.emit(e, self)
-        if self.dropAccept:
-            e.accept()
+        if (self.editEnabled):
+            self.signal_dropEvent.emit(e, self)
+            if self.dropAccept:
+                e.accept()
+            else:
+                e.ignore()
         else:
             e.ignore()
 
     def event(self, event):
-        if (event.type() == QtCore.QEvent.KeyPress):    # bypass QWidget behaviors which is to checks for Tab and Shift+Tab and tries to move the focus appropriately
+        if (self.editEnabled and event.type() == QtCore.QEvent.KeyPress):    # bypass QWidget behaviors which is to checks for Tab and Shift+Tab and tries to move the focus appropriately
             self.keyPressEvent(event)
             return True
 
@@ -170,7 +181,7 @@ class Nodz(QtWidgets.QGraphicsView):
         self.currentState = 'DEFAULT'
 
     def contextMenuEvent(self, event):
-        if event.modifiers() & QtCore.Qt.AltModifier or event.modifiers() & QtCore.Qt.ControlModifier:
+        if (event.modifiers() & QtCore.Qt.AltModifier) or (event.modifiers() & QtCore.Qt.ControlModifier) or (not self.editEnabled):
             return
 
         p=event.pos()
@@ -214,7 +225,8 @@ class Nodz(QtWidgets.QGraphicsView):
             self.setInteractive(False)
 
         # Drag Item
-        elif (event.button() == QtCore.Qt.LeftButton and
+        elif (self.editEnabled and
+             event.button() == QtCore.Qt.LeftButton and
               (event.modifiers() == QtCore.Qt.NoModifier) and
               isinstance(self.scene().itemAt(self.mapToScene(event.pos()), QtGui.QTransform()), NodeItem)):
             self.currentState = 'DRAG_ITEM'
@@ -245,7 +257,8 @@ class Nodz(QtWidgets.QGraphicsView):
             self.setInteractive(False)
 
         # Cut tool Golaem
-        elif (event.button() == QtCore.Qt.LeftButton and
+        elif (self.editEnabled and
+                event.button() == QtCore.Qt.LeftButton and
               (event.modifiers() & QtCore.Qt.AltModifier) and
               self.scene().itemAt(self.mapToScene(event.pos()), QtGui.QTransform()) is None):
             self.currentState = 'CUT_LINK'
@@ -406,7 +419,7 @@ class Nodz(QtWidgets.QGraphicsView):
 
         super(Nodz, self).mouseReleaseEvent(event)
 
-        if(event.button() == QtCore.Qt.MouseButton.RightButton and not event.isAccepted()):
+        if(self.editEnabled and event.button() == QtCore.Qt.MouseButton.RightButton and not event.isAccepted()):
             self.signal_ViewRightClicked.emit()
 
     def keyPressEvent(self, event):
@@ -421,8 +434,15 @@ class Nodz(QtWidgets.QGraphicsView):
         if event.key() not in self.pressedKeys:
             self.pressedKeys.append(event.key())
 
-        if event.key() in (QtCore.Qt.Key_Delete, QtCore.Qt.Key_Backspace):
-            self._deleteSelectedNodes()
+        if (self.editEnabled):
+            if event.key() in (QtCore.Qt.Key_Delete, QtCore.Qt.Key_Backspace):
+                self._deleteSelectedNodes()
+
+            if event.key() == self.nodeCreationPopupKeyEvent:
+                self.nodeCreationPopup.popup()
+
+            if event.key() == QtCore.Qt.Key_Escape:
+                self.nodeCreationPopup.popdown()
 
         if event.key() == QtCore.Qt.Key_F:
             self._focus()
@@ -433,12 +453,6 @@ class Nodz(QtWidgets.QGraphicsView):
 
         if event.key() == QtCore.Qt.Key_S:
             self._nodeSnap = True
-
-        if event.key() == self.nodeCreationPopupKeyEvent:
-            self.nodeCreationPopup.popup()
-
-        if event.key() == QtCore.Qt.Key_Escape:
-            self.nodeCreationPopup.popdown()
 
         # Emit signal.
         self.signal_KeyPressed.emit(event.key())
@@ -1406,7 +1420,8 @@ class NodeScene(QtWidgets.QGraphicsScene):
         Make the dragging of nodes into the scene possible.
 
         """
-        event.setDropAction(QtCore.Qt.MoveAction)
+        if (self.parent().editEnabled):
+            event.setDropAction(QtCore.Qt.MoveAction)
         event.accept()
 
     def dragMoveEvent(self, event):
@@ -1414,7 +1429,8 @@ class NodeScene(QtWidgets.QGraphicsScene):
         Make the dragging of nodes into the scene possible.
 
         """
-        event.setDropAction(QtCore.Qt.MoveAction)
+        if (self.parent().editEnabled):
+            event.setDropAction(QtCore.Qt.MoveAction)
         event.accept()
 
     def dropEvent(self, event):
@@ -1423,8 +1439,8 @@ class NodeScene(QtWidgets.QGraphicsScene):
 
         """
         # Emit signal.
-        self.signal_Dropped.emit(event.scenePos())
-
+        if (self.parent().editEnabled):
+            self.signal_Dropped.emit(event.scenePos())
         event.accept()
 
     def drawBackground(self, painter, rect):
@@ -2114,7 +2130,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 offset += self.attrHeight
 
     def contextMenuEvent(self, event):
-        self.scene().parent().signal_NodeContextMenuEvent.emit(event, self.name)
+        if (self.scene().parent().editEnabled):
+            self.scene().parent().signal_NodeContextMenuEvent.emit(event, self.name)
 
     def mousePressEvent(self, event):
         """
@@ -2122,28 +2139,30 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
         """
         # nodzInst = self.scene().views()[0]
+        if (self.scene().parent().editEnabled):
+            maxZValue = 0
+            nodes = self.scene().nodes
+            for node in nodes.values():
+                node.setZValue(node.baseZValue)
+                maxZValue = max(maxZValue, node.baseZValue)
 
-        maxZValue = 0
-        nodes = self.scene().nodes
-        for node in nodes.values():
-            node.setZValue(node.baseZValue)
-            maxZValue = max(maxZValue, node.baseZValue)
+            for item in self.scene().items():
+                if isinstance(item, ConnectionItem):
+                    item.setZValue(1)
 
-        for item in self.scene().items():
-            if isinstance(item, ConnectionItem):
-                item.setZValue(1)
+            self.setZValue(maxZValue+1)
+            self.attributeBeingPlugged = None
 
-        self.setZValue(maxZValue+1)
-        self.attributeBeingPlugged = None
-
-        # if middle click, initiate a link from the current attribute
-        if (event.button() == QtCore.Qt.MiddleButton):
-            self.attributeBeingPlugged = self.getAttributePlugAtPos(event.scenePos())
-            if (self.attributeBeingPlugged is not None):
-                self.attributeBeingPlugged.mousePressEvent(event)
+            # if middle click, initiate a link from the current attribute
+            if (event.button() == QtCore.Qt.MiddleButton):
+                self.attributeBeingPlugged = self.getAttributePlugAtPos(event.scenePos())
+                if (self.attributeBeingPlugged is not None):
+                    self.attributeBeingPlugged.mousePressEvent(event)
+            else:
+                super(NodeItem, self).mousePressEvent(event)
+                self.lastMousePressPos = self.pos() # take position after potential node selection / edition which may change the layout
         else:
             super(NodeItem, self).mousePressEvent(event)
-            self.lastMousePressPos = self.pos() # take position after potential node selection / edition which may change the layout
 
     def mouseDoubleClickEvent(self, event):
         """
@@ -2151,179 +2170,188 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
         """
         super(NodeItem, self).mouseDoubleClickEvent(event)
-        self.scene().parent().signal_NodeDoubleClicked.emit(self.name)
+
+        if (self.scene().parent().editEnabled):
+            self.scene().parent().signal_NodeDoubleClicked.emit(self.name)
 
     def mouseMoveEvent(self, event):
         """
         .
 
         """
-        if (self.attributeBeingPlugged is not None):
-            self.attributeBeingPlugged.mouseMoveEvent(event)
-        else:
-            if self.scene().views()[0].gridVisToggle:
-                if self.scene().views()[0].gridSnapToggle or self.scene().views()[0]._nodeSnap:
-                    gridSize = self.scene().gridSize
+        if (self.scene().parent().editEnabled):
+            if (self.attributeBeingPlugged is not None):
+                self.attributeBeingPlugged.mouseMoveEvent(event)
+            else:
+                if self.scene().views()[0].gridVisToggle:
+                    if self.scene().views()[0].gridSnapToggle or self.scene().views()[0]._nodeSnap:
+                        gridSize = self.scene().gridSize
 
-                    currentPos = self.mapToScene(event.pos().x() - self.baseWidth / 2,
-                                                event.pos().y() - self.height / 2)
+                        currentPos = self.mapToScene(event.pos().x() - self.baseWidth / 2,
+                                                    event.pos().y() - self.height / 2)
 
-                    snap_x = (round(currentPos.x() / gridSize) * gridSize) - gridSize/4
-                    snap_y = (round(currentPos.y() / gridSize) * gridSize) - gridSize/4
-                    snap_pos = QtCore.QPointF(snap_x, snap_y)
-                    self.setPos(snap_pos)
+                        snap_x = (round(currentPos.x() / gridSize) * gridSize) - gridSize/4
+                        snap_y = (round(currentPos.y() / gridSize) * gridSize) - gridSize/4
+                        snap_pos = QtCore.QPointF(snap_x, snap_y)
+                        self.setPos(snap_pos)
 
-                    self.scene().updateScene()
-                else:
-                    self.scene().updateScene()
-                    super(NodeItem, self).mouseMoveEvent(event)
+                        self.scene().updateScene()
+                    else:
+                        self.scene().updateScene()
+                        super(NodeItem, self).mouseMoveEvent(event)
 
-            # Moving the node : is there a connectionItem around there to plug ourself
-            nodzInst = self.scene().views()[0]
-            config = nodzInst.config
+                # Moving the node : is there a connectionItem around there to plug ourself
+                nodzInst = self.scene().views()[0]
+                config = nodzInst.config
 
-            if event.modifiers() & QtCore.Qt.AltModifier:
-                self._disconnectAll()
+                if event.modifiers() & QtCore.Qt.AltModifier:
+                    self._disconnectAll()
 
-            # Handle drop on link : highlight currently selected link if any, and only if nodeItem is a pass through (1 in 1 out)
-            nodzInst.currentHoveredLink = None
-            if (len(self.plugs) == 1 and len(self.sockets) == 1):
-                theNodePlug = self.plugs.itervalues().next()
-                theNodeSocket = self.sockets.itervalues().next()
-                plugConnections = theNodePlug.connections
-                socketConnections = theNodeSocket.connections
-                if (len(plugConnections) == 0 and len(socketConnections) == 0):
-                    mbb = utils._createPointerBoundingBox(pointerPos=event.scenePos().toPoint(),bbSize=config['mouse_bounding_box'])
-                    hoveredItems = self.scene().items(mbb)
-                    lowestDistance2 = 10000000000
-                    for hoveredItem in hoveredItems:
-                        if (isinstance(hoveredItem, ConnectionItem)):
-                            # Check that link accepts plug-nodeSocket and nodePlug-socket connections
-                            # use theNodeSocket to test accepts, as plugs must be empty / not at max connection
-                            if (theNodeSocket.accepts(hoveredItem.plugItem) and theNodePlug.accepts(hoveredItem.socketItem)):
-                                fromScenePos = event.scenePos()
-                                toScenePos = hoveredItem.center()
-                                deltaPos = toScenePos - fromScenePos
-                                distance2 = deltaPos.x() * deltaPos.x() + deltaPos.y() * deltaPos.y()
-                                if (nodzInst.currentHoveredLink is None or distance2 < lowestDistance2):
-                                    lowestDistance2 = distance2
-                                    nodzInst.currentHoveredLink = hoveredItem
+                # Handle drop on link : highlight currently selected link if any, and only if nodeItem is a pass through (1 in 1 out)
+                nodzInst.currentHoveredLink = None
+                if (len(self.plugs) == 1 and len(self.sockets) == 1):
+                    theNodePlug = self.plugs.itervalues().next()
+                    theNodeSocket = self.sockets.itervalues().next()
+                    plugConnections = theNodePlug.connections
+                    socketConnections = theNodeSocket.connections
+                    if (len(plugConnections) == 0 and len(socketConnections) == 0):
+                        mbb = utils._createPointerBoundingBox(pointerPos=event.scenePos().toPoint(),bbSize=config['mouse_bounding_box'])
+                        hoveredItems = self.scene().items(mbb)
+                        lowestDistance2 = 10000000000
+                        for hoveredItem in hoveredItems:
+                            if (isinstance(hoveredItem, ConnectionItem)):
+                                # Check that link accepts plug-nodeSocket and nodePlug-socket connections
+                                # use theNodeSocket to test accepts, as plugs must be empty / not at max connection
+                                if (theNodeSocket.accepts(hoveredItem.plugItem) and theNodePlug.accepts(hoveredItem.socketItem)):
+                                    fromScenePos = event.scenePos()
+                                    toScenePos = hoveredItem.center()
+                                    deltaPos = toScenePos - fromScenePos
+                                    distance2 = deltaPos.x() * deltaPos.x() + deltaPos.y() * deltaPos.y()
+                                    if (nodzInst.currentHoveredLink is None or distance2 < lowestDistance2):
+                                        lowestDistance2 = distance2
+                                        nodzInst.currentHoveredLink = hoveredItem
 
-            nodzInst.currentHoveredNodeForDrop = None
-            mbb = utils._createPointerBoundingBox(pointerPos=event.scenePos().toPoint(),bbSize=config['mouse_bounding_box'])
-            hoveredItems = self.scene().items(mbb)
-            lowestDistance2 = 10000000000
-            for hoveredItem in hoveredItems:
-                if (hoveredItem is not self and isinstance(hoveredItem, NodeItem) and hoveredItem.acceptNodeDrop):
-                    fromScenePos = event.scenePos()
-                    toScenePos = hoveredItem.center()
-                    deltaPos = toScenePos - fromScenePos
-                    distance2 = deltaPos.x() * deltaPos.x() + deltaPos.y() * deltaPos.y()
-                    if (nodzInst.currentHoveredNodeForDrop is None or distance2 < lowestDistance2):
-                        lowestDistance2 = distance2
-                        nodzInst.currentHoveredNodeForDrop = hoveredItem
-                        
-        self.checkIsWithinSceneRect()
+                nodzInst.currentHoveredNodeForDrop = None
+                mbb = utils._createPointerBoundingBox(pointerPos=event.scenePos().toPoint(),bbSize=config['mouse_bounding_box'])
+                hoveredItems = self.scene().items(mbb)
+                lowestDistance2 = 10000000000
+                for hoveredItem in hoveredItems:
+                    if (hoveredItem is not self and isinstance(hoveredItem, NodeItem) and hoveredItem.acceptNodeDrop):
+                        fromScenePos = event.scenePos()
+                        toScenePos = hoveredItem.center()
+                        deltaPos = toScenePos - fromScenePos
+                        distance2 = deltaPos.x() * deltaPos.x() + deltaPos.y() * deltaPos.y()
+                        if (nodzInst.currentHoveredNodeForDrop is None or distance2 < lowestDistance2):
+                            lowestDistance2 = distance2
+                            nodzInst.currentHoveredNodeForDrop = hoveredItem
+                            
+            self.checkIsWithinSceneRect()
+        # else:
+        #     super(NodeItem, self).mouseMoveEvent(event) # parent graphic item will move on mouseMoveEvent if not blocked
 
     def mouseReleaseEvent(self, event):
         """
         Emit signal_NodeMoved signal.
 
         """
-        # Emit node moved signal.
-        nodzInst = self.scene().views()[0]
-        if(event.button() == QtCore.Qt.MouseButton.LeftButton):
+        if (self.scene().parent().editEnabled):
+            # Emit node moved signal.
+            nodzInst = self.scene().views()[0]
+            if(event.button() == QtCore.Qt.MouseButton.LeftButton):
 
-            if (self.lastMousePressPos != self.pos()):
-                self.scene().signal_NodeMoved.emit(self.name, self.pos())
+                if (self.lastMousePressPos != self.pos()):
+                    self.scene().signal_NodeMoved.emit(self.name, self.pos())
 
-                nodesMovedList = [self.name]
-                fromPosList = [self.lastMousePressPos]
-                toPosList = [self.pos()]
-                # nodesMovedList.append(self)
-                # fromPosList.append()
-                # toPosList.append(self.pos())
+                    nodesMovedList = [self.name]
+                    fromPosList = [self.lastMousePressPos]
+                    toPosList = [self.pos()]
+                    # nodesMovedList.append(self)
+                    # fromPosList.append()
+                    # toPosList.append(self.pos())
 
-                # print("move node {} from {} to {}".format(self.name, self.lastMousePressPos, self.pos()))
+                    # print("move node {} from {} to {}".format(self.name, self.lastMousePressPos, self.pos()))
 
-                # if currentHoveredNodeForDrop is not None, we drop node on other node : don't care about "moving" i
-                if nodzInst.currentHoveredNodeForDrop is None:
-                    nodzInst.signal_UndoRedoMoveNodes.emit(nodzInst, nodesMovedList, fromPosList, toPosList)
+                    # if currentHoveredNodeForDrop is not None, we drop node on other node : don't care about "moving" i
+                    if nodzInst.currentHoveredNodeForDrop is None:
+                        nodzInst.signal_UndoRedoMoveNodes.emit(nodzInst, nodesMovedList, fromPosList, toPosList)
 
-                #handle connection if dropped an unconnected "pass through" node on a link
-                if nodzInst.currentHoveredLink is not None:
+                    #handle connection if dropped an unconnected "pass through" node on a link
+                    if nodzInst.currentHoveredLink is not None:
+                        fromNode = nodzInst.currentHoveredLink.plugNode
+                        fromAttr = nodzInst.currentHoveredLink.plugAttr
+                        toNode = nodzInst.currentHoveredLink.socketNode
+                        toAttr = nodzInst.currentHoveredLink.socketAttr
+
+                        theNodePlugAttr = self.plugs.itervalues().next().attribute
+                        theNodeSocketAttr = self.sockets.itervalues().next().attribute
+
+                        removedConnections = list()
+                        addedConnections = list()
+
+                        # pack the layout update call in a single call
+                        nodzInst.signal_StartCompoundInteraction.emit(nodzInst)
+                        removedConnections.append(ConnectionInfo(nodzInst.currentHoveredLink))
+                        nodzInst.currentHoveredLink._remove()
+
+                        addedConnections.append(ConnectionInfo(nodzInst.createConnection(fromNode, fromAttr, self.name, theNodeSocketAttr)))
+                        addedConnections.append(ConnectionInfo(nodzInst.createConnection(self.name, theNodePlugAttr, toNode, toAttr)))
+
+                        nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)
+
+                        nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
+
+                    if nodzInst.currentHoveredNodeForDrop is not None:
+                        nodzInst.signal_dropOnNode.emit(nodzInst, nodzInst.currentHoveredNodeForDrop.name) # can get back selection from nodzInst
+
+            elif(event.button() == QtCore.Qt.MouseButton.MiddleButton):
+                if (self.attributeBeingPlugged is not None):
+                    self.attributeBeingPlugged.mouseReleaseEvent(event)
+                elif nodzInst.currentHoveredLink is not None:
                     fromNode = nodzInst.currentHoveredLink.plugNode
                     fromAttr = nodzInst.currentHoveredLink.plugAttr
                     toNode = nodzInst.currentHoveredLink.socketNode
-                    toAttr = nodzInst.currentHoveredLink.socketAttr
+                    toAttr = nodzInst.currentHoveredLink.plugAttr
 
-                    theNodePlugAttr = self.plugs.itervalues().next().attribute
-                    theNodeSocketAttr = self.sockets.itervalues().next().attribute
+                    theNodePlugAttr = self.plugs.itervalues().next().key()
+                    theNodeSocketAttr = self.sockets.itervalues().next()().key()
 
                     removedConnections = list()
                     addedConnections = list()
 
-                    # pack the layout update call in a single call
-                    nodzInst.signal_StartCompoundInteraction.emit(nodzInst)
                     removedConnections.append(ConnectionInfo(nodzInst.currentHoveredLink))
                     nodzInst.currentHoveredLink._remove()
 
-                    addedConnections.append(ConnectionInfo(nodzInst.createConnection(fromNode, fromAttr, self.name, theNodeSocketAttr)))
-                    addedConnections.append(ConnectionInfo(nodzInst.createConnection(self.name, theNodePlugAttr, toNode, toAttr)))
-
-                    nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)
+                    addedConnections.append(ConnectionInfo(nodzInst.createConnection(fromNode, fromAttr, self, theNodeSocketAttr)))
+                    addedConnections.append(ConnectionInfo(nodzInst.createConnection(self, theNodePlugAttr, toNode, toAttr)))
 
                     nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
 
-                if nodzInst.currentHoveredNodeForDrop is not None:
-                    nodzInst.signal_dropOnNode.emit(nodzInst, nodzInst.currentHoveredNodeForDrop.name) # can get back selection from nodzInst
+            # if(event.button() == QtCore.Qt.MouseButton.RightButton):
+            #     self.scene().parent().signal_NodeRightClicked.emit(self.name)
 
-        elif(event.button() == QtCore.Qt.MouseButton.MiddleButton):
-            if (self.attributeBeingPlugged is not None):
-                self.attributeBeingPlugged.mouseReleaseEvent(event)
-            elif nodzInst.currentHoveredLink is not None:
-                fromNode = nodzInst.currentHoveredLink.plugNode
-                fromAttr = nodzInst.currentHoveredLink.plugAttr
-                toNode = nodzInst.currentHoveredLink.socketNode
-                toAttr = nodzInst.currentHoveredLink.plugAttr
+            self.attributeBeingPlugged = None
 
-                theNodePlugAttr = self.plugs.itervalues().next().key()
-                theNodeSocketAttr = self.sockets.itervalues().next()().key()
+            if (nodzInst.currentHoveredNodeForDrop is None):
+                super(NodeItem, self).mouseReleaseEvent(event)
 
-                removedConnections = list()
-                addedConnections = list()
-
-                removedConnections.append(ConnectionInfo(nodzInst.currentHoveredLink))
-                nodzInst.currentHoveredLink._remove()
-
-                addedConnections.append(ConnectionInfo(nodzInst.createConnection(fromNode, fromAttr, self, theNodeSocketAttr)))
-                addedConnections.append(ConnectionInfo(nodzInst.createConnection(self, theNodePlugAttr, toNode, toAttr)))
-
-                nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
-
-        # if(event.button() == QtCore.Qt.MouseButton.RightButton):
-        #     self.scene().parent().signal_NodeRightClicked.emit(self.name)
-
-        self.attributeBeingPlugged = None
-
-        if (nodzInst.currentHoveredNodeForDrop is None):
-            super(NodeItem, self).mouseReleaseEvent(event)
-
-        nodzInst.currentHoveredNodeForDrop = None
-        nodzInst.currentHoveredLink = None
-        self.setZValue(self.baseZValue) #restore the base Z order (notes behind, other ndoes in front...)
+            nodzInst.currentHoveredNodeForDrop = None
+            nodzInst.currentHoveredLink = None
+            self.setZValue(self.baseZValue)  #restore the base Z order (notes behind, other ndoes in front...)
+        # else:
+        #     super(NodeItem, self).mouseReleaseEvent(event)
 
     def hoverLeaveEvent(self, event):
         """
         .
 
         """
-        nodzInst = self.scene().views()[0]
+        if (self.scene().parent().editEnabled):
+            nodzInst = self.scene().views()[0]
 
-        for item in nodzInst.scene().items():
-            if isinstance(item, ConnectionItem):
-                item.setZValue(0)
-
+            for item in nodzInst.scene().items():
+                if isinstance(item, ConnectionItem):
+                    item.setZValue(0)
+        
         super(NodeItem, self).hoverLeaveEvent(event)
 
 
@@ -2438,19 +2466,22 @@ class SlotItem(QtWidgets.QGraphicsItem):
         Start the connection process.
 
         """
-        if event.button() == QtCore.Qt.LeftButton or event.button() == QtCore.Qt.MiddleButton:
-            self.newConnection = ConnectionItem(self.center(),
-                                                self.mapToScene(event.pos()),
-                                                self,
-                                                None)
+        if (self.scene().parent().editEnabled):
+            if event.button() == QtCore.Qt.LeftButton or event.button() == QtCore.Qt.MiddleButton:
+                self.newConnection = ConnectionItem(self.center(),
+                                                    self.mapToScene(event.pos()),
+                                                    self,
+                                                    None)
 
-            self.connections.append(self.newConnection)
-            self.scene().addItem(self.newConnection)
+                self.connections.append(self.newConnection)
+                self.scene().addItem(self.newConnection)
 
-            nodzInst = self.scene().views()[0]
-            nodzInst.drawingConnection = True
-            nodzInst.sourceSlot = self
-            nodzInst.currentDataType = self.dataType
+                nodzInst = self.scene().views()[0]
+                nodzInst.drawingConnection = True
+                nodzInst.sourceSlot = self
+                nodzInst.currentDataType = self.dataType
+            else:
+                super(SlotItem, self).mousePressEvent(event)
         else:
             super(SlotItem, self).mousePressEvent(event)
 
@@ -2459,30 +2490,33 @@ class SlotItem(QtWidgets.QGraphicsItem):
         Update the new connection's end point position.
 
         """
-        nodzInst = self.scene().views()[0]
-        config = nodzInst.config
-        if nodzInst.drawingConnection:
-            mbb = utils._createPointerBoundingBox(pointerPos=event.scenePos().toPoint(),
-                                                  bbSize=config['mouse_bounding_box'])
+        if (self.scene().parent().editEnabled):
+            nodzInst = self.scene().views()[0]
+            config = nodzInst.config
+            if nodzInst.drawingConnection:
+                mbb = utils._createPointerBoundingBox(pointerPos=event.scenePos().toPoint(),
+                                                    bbSize=config['mouse_bounding_box'])
 
-            # Get nodes in pointer's bounding box.
-            targets = self.scene().items(mbb)
+                # Get nodes in pointer's bounding box.
+                targets = self.scene().items(mbb)
 
-            if any(isinstance(target, NodeItem) for target in targets):
-                if self.parentItem() not in targets:
-                    for target in targets:
-                        if isinstance(target, NodeItem):
-                            nodzInst.currentHoveredNodeForConnection = target
-                            eventScenePos = self.mapToScene(event.pos())
-                            nodzInst.currentHoveredAttribute = nodzInst.currentHoveredNodeForConnection.getAttributeAtPos(eventScenePos)
+                if any(isinstance(target, NodeItem) for target in targets):
+                    if self.parentItem() not in targets:
+                        for target in targets:
+                            if isinstance(target, NodeItem):
+                                nodzInst.currentHoveredNodeForConnection = target
+                                eventScenePos = self.mapToScene(event.pos())
+                                nodzInst.currentHoveredAttribute = nodzInst.currentHoveredNodeForConnection.getAttributeAtPos(eventScenePos)
 
+                else:
+                    nodzInst.currentHoveredNodeForConnection = None
+                    nodzInst.currentHoveredAttribute = None
+
+                # Set connection's end point.
+                self.newConnection.target_point = self.mapToScene(event.pos())
+                self.newConnection.updatePath()
             else:
-                nodzInst.currentHoveredNodeForConnection = None
-                nodzInst.currentHoveredAttribute = None
-
-            # Set connection's end point.
-            self.newConnection.target_point = self.mapToScene(event.pos())
-            self.newConnection.updatePath()
+                super(SlotItem, self).mouseMoveEvent(event)
         else:
             super(SlotItem, self).mouseMoveEvent(event)
 
@@ -2491,43 +2525,46 @@ class SlotItem(QtWidgets.QGraphicsItem):
         Apply the connection if target_slot is valid.
 
         """
-        nodzInst = self.scene().views()[0]
-        if event.button() == QtCore.Qt.LeftButton or event.button() == QtCore.Qt.MiddleButton :
-            nodzInst.drawingConnection = False
-            nodzInst.currentDataType = None
+        if (self.scene().parent().editEnabled):
+            nodzInst = self.scene().views()[0]
+            if event.button() == QtCore.Qt.LeftButton or event.button() == QtCore.Qt.MiddleButton :
+                nodzInst.drawingConnection = False
+                nodzInst.currentDataType = None
 
-            target = self.scene().itemAt(event.scenePos().toPoint(), QtGui.QTransform())
+                target = self.scene().itemAt(event.scenePos().toPoint(), QtGui.QTransform())
 
-            if isinstance(target, NodeItem):
-                target = target.getAttributeSocketAtPos(event.scenePos())
+                if isinstance(target, NodeItem):
+                    target = target.getAttributeSocketAtPos(event.scenePos())
 
-            if not isinstance(target, SlotItem):
-                self.newConnection._remove()
-                super(SlotItem, self).mouseReleaseEvent(event)
-                return
+                if not isinstance(target, SlotItem):
+                    self.newConnection._remove()
+                    super(SlotItem, self).mouseReleaseEvent(event)
+                    return
 
-            if target.accepts(self):
-                self.newConnection.target = target
-                self.newConnection.source = self
-                self.newConnection.target_point = target.center()
-                self.newConnection.source_point = self.center()
+                if target.accepts(self):
+                    self.newConnection.target = target
+                    self.newConnection.source = self
+                    self.newConnection.target_point = target.center()
+                    self.newConnection.source_point = self.center()
 
-                # Perform the ConnectionItem.
-                self.connect(target, self.newConnection)
-                target.connect(self, self.newConnection)
+                    # Perform the ConnectionItem.
+                    self.connect(target, self.newConnection)
+                    target.connect(self, self.newConnection)
 
-                self.newConnection.updatePath()
+                    self.newConnection.updatePath()
 
-                removedConnections = list()
-                addedConnections = list()
-                addedConnections.append(ConnectionInfo(self.newConnection))
-                nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
+                    removedConnections = list()
+                    addedConnections = list()
+                    addedConnections.append(ConnectionInfo(self.newConnection))
+                    nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
 
+                else:
+                    self.newConnection._remove()
             else:
-                self.newConnection._remove()
+                super(SlotItem, self).mouseReleaseEvent(event)
         else:
             super(SlotItem, self).mouseReleaseEvent(event)
-
+        
         nodzInst.currentHoveredNodeForConnection = None
         nodzInst.currentHoveredNodeForDrop = None
         nodzInst.currentHoveredAttribute = None
