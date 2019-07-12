@@ -2413,9 +2413,20 @@ class SlotItem(QtWidgets.QGraphicsItem):
 
         """
         # no plug on plug or socket on socket
-        hasPlugItem = isinstance(self, PlugItem) or isinstance(slot_item, PlugItem)
-        hasSocketItem = isinstance(self, SocketItem) or isinstance(slot_item, SocketItem)
-        if not (hasPlugItem and hasSocketItem):
+        thePlugItem = None
+        theSocketItem = None
+        
+        if isinstance(self, PlugItem):
+            thePlugItem = self
+        if isinstance(slot_item, PlugItem):
+            thePlugItem = slot_item
+
+        if isinstance(self, SocketItem):
+            theSocketItem = self
+        if isinstance(slot_item, SocketItem):
+            theSocketItem = slot_item
+
+        if thePlugItem is None or theSocketItem is None:
             return False
 
         # no self connection
@@ -2437,8 +2448,9 @@ class SlotItem(QtWidgets.QGraphicsItem):
             processedNodes = list()
             nodesToProcess = list()
             nextNodesToProcess = list()
-            processedNodes.append(self.parentItem().name) #forbid target node in parents
-            nodesToProcess.append(slot_item.parentItem()) # check parents from sourceNode
+
+            processedNodes.append(theSocketItem.parentItem().name) #forbid target node in parents
+            nodesToProcess.append(thePlugItem.parentItem()) # check parents from sourceNode
 
             while (not len(nodesToProcess) == 0 and validConnection):
                 for nodeToProcess in nodesToProcess:
@@ -2446,9 +2458,9 @@ class SlotItem(QtWidgets.QGraphicsItem):
                     for socket in nodeToProcess.sockets.values():
                         for connection in socket.connections:
                             if connection.plugNode in processedNodes:
-                                validConnection = False
-                                break
-                            nextNodesToProcess.append( self.scene().nodes[connection.plugNode])
+                                validConnection = validConnection and connection.plugNode != processedNodes[0] # processedNodes[0] is theSocketItem.parentItem()
+                            else:
+                                nextNodesToProcess.append( self.scene().nodes[connection.plugNode] ) # may be stacked several times in nextNodesToProcess, but will be skipped later by processedNodes test
                         if not validConnection:
                             break
                 nodesToProcess = nextNodesToProcess[:]
@@ -2458,7 +2470,7 @@ class SlotItem(QtWidgets.QGraphicsItem):
                 print "This Connection would make a loop, this is forbidden"
                 return
 
-        #otherwize, all fine.
+        #otherwise, all fine.
         return True
 
     def mousePressEvent(self, event):
