@@ -594,6 +594,12 @@ class Nodz(QtWidgets.QGraphicsView):
                 #NodeItem
                 selected_nodes.append(node.name)
 
+        if len(selected_nodes) == 0:
+            return
+
+        nodzInst = self.scene().views()[0]
+        nodzInst.signal_StartCompoundInteraction.emit(nodzInst)
+
         if len(selected_nodes) > 0:
             self.signal_NodePreDeleted.emit(selected_nodes)
 
@@ -625,6 +631,8 @@ class Nodz(QtWidgets.QGraphicsView):
         if len(removedConnections)>0 :
             addedConnections = list()
             self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
+
+        nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)            
 
         # Emit signal.
         if len(selected_nodes) > 0:
@@ -2067,7 +2075,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 iconRect = QtCore.QRect(0 + (self.baseWidth - iconSize)/2,
                         0 + (self.baseWidth - iconSize)/2,
                         iconSize, iconSize)
-                
+
                 self.scaledIcon.paint(painter, iconRect, QtCore.Qt.AlignCenter, QtGui.QIcon.Normal, QtGui.QIcon.On)
                 
         if (nodeSizeInScreenPixels > titleDisplayLimitPixOnScreen):
@@ -2076,7 +2084,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                             self.name)
 
         # Attributes.
-        if (nodeSizeInScreenPixels > big_icon_display_limit):
+        if (nodeSizeInScreenPixels >= big_icon_display_limit):
             offset = 0
             for attr in self.attrs:
 
