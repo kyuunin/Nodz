@@ -2268,11 +2268,18 @@ class NodeItem(QtWidgets.QGraphicsItem):
             if(event.button() == QtCore.Qt.MouseButton.LeftButton):
 
                 if (self.lastMousePressPos != self.pos()):
-                    self.scene().signal_NodeMoved.emit(self.name, self.pos())
+                    nodesMovedList = list()
+                    fromPosList = list()
+                    toPosList = list()
 
-                    nodesMovedList = [self.name]
-                    fromPosList = [self.lastMousePressPos]
-                    toPosList = [self.pos()]
+                    deltaPosAdded = self.pos() - self.lastMousePressPos
+                    if (nodzInst.selectedNodes is not None):
+                        for selectedNode in nodzInst.selectedNodes:
+                            selectedNodeInst = self.scene().nodes[selectedNode]
+                            self.scene().signal_NodeMoved.emit(selectedNode, selectedNodeInst.pos())
+                            nodesMovedList.append(selectedNode)
+                            fromPosList.append(selectedNodeInst.pos() - deltaPosAdded)
+                            toPosList.append(selectedNodeInst.pos())
                     # nodesMovedList.append(self)
                     # fromPosList.append()
                     # toPosList.append(self.pos())
