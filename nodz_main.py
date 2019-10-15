@@ -589,13 +589,14 @@ class Nodz(QtWidgets.QGraphicsView):
 
         # iterate on nodes first, will delete single connections after getting back selected items
         selected_nodes = list()
+
+        if len(self.scene().selectedItems()) == 0:
+            return
+
         for node in self.scene().selectedItems():
             if type(node) is NodeItem:
                 #NodeItem
                 selected_nodes.append(node.name)
-
-        if len(selected_nodes) == 0:
-            return
 
         nodzInst = self.scene().views()[0]
         nodzInst.signal_StartCompoundInteraction.emit(nodzInst)
@@ -2722,9 +2723,12 @@ class PlugItem(SlotItem):
             self.connections[self.maxConnections-1]._remove()
 
         # Populate connection.
-        connection.socketItem = socket_item
+        connection.plugItem = self
         connection.plugNode = self.parentItem().name
         connection.plugAttr = self.attribute
+        connection.socketItem = socket_item
+        connection.socketNode = socket_item.parentItem().name
+        connection.socketAttr = socket_item.attribute
 
         # Add socket to connected slots.
         if socket_item in self.connected_slots:
@@ -2831,9 +2835,12 @@ class SocketItem(SlotItem):
             self.connections[self.maxConnections-1]._remove()
 
         # Populate connection.
-        connection.plugItem = plug_item
+        connection.socketItem = self
         connection.socketNode = self.parentItem().name
         connection.socketAttr = self.attribute
+        connection.plugItem = plug_item
+        connection.plugNode = plug_item.parentItem().name
+        connection.plugAttr = plug_item.attribute
 
         # Add plug to connected slots.
         self.connected_slots.append(plug_item)
