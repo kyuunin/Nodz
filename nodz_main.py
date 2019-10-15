@@ -172,7 +172,7 @@ class Nodz(QtWidgets.QGraphicsView):
         inFactor = 1.15
         outFactor = 1 / inFactor
 
-        if event.angleDelta() > 0:
+        if event.angleDelta().y() > 0:
             zoomFactor = inFactor
         else:
             zoomFactor = outFactor
@@ -577,6 +577,15 @@ class Nodz(QtWidgets.QGraphicsView):
         bbw = bbx_max - bbx_min
         bbh = bby_max - bby_min
         return QtCore.QRectF(QtCore.QRect(bbx_min, bby_min, bbw, bbh))
+
+    def _resetScale(self):
+        """
+        Resets the scale of the graphics view
+
+        """
+        originalTransform = self.transform()
+        self.resetTransform()
+        self.translate(originalTransform.dx(), originalTransform.dy())
 
     def _deleteSelectedNodes(self):
         """
