@@ -172,7 +172,7 @@ class Nodz(QtWidgets.QGraphicsView):
         inFactor = 1.15
         outFactor = 1 / inFactor
 
-        if event.delta() > 0:
+        if event.angleDelta() > 0:
             zoomFactor = inFactor
         else:
             zoomFactor = outFactor
