@@ -36,7 +36,7 @@ class Nodz(QtWidgets.QGraphicsView):
     signal_UndoRedoAddNode = QtCore.Signal(object, object) # node added user data. For consistency with signal_UndoRedoDeleteSelectedNodes (we may actually store undo via signal_NodeCreated, but would be called a lot of time from loadGraph)
     signal_UndoRedoMoveNodes = QtCore.Signal(object, object, object, object) # node name list, fromPos list, toPos list. signal_NodeMoved does not send previous position
     signal_UndoRedoConnectNodes = QtCore.Signal(object, object, object)  # list of removed ConnectionInfo (potentially due to addition), list of new ConnectionInfo. Could deal with it with plug/socket connected / disconnected but would be tedious with a lot of calls
-    
+
     signal_dropOnNode = QtCore.Signal(object, object) #nodzInst, nodeItem
 
     signal_StartCompoundInteraction = QtCore.Signal(object) # starts user interaction on a nodz
@@ -172,7 +172,7 @@ class Nodz(QtWidgets.QGraphicsView):
         inFactor = 1.15
         outFactor = 1 / inFactor
 
-        if event.delta() > 0:
+        if event.angleDelta().y() > 0:
             zoomFactor = inFactor
         else:
             zoomFactor = outFactor
@@ -419,7 +419,7 @@ class Nodz(QtWidgets.QGraphicsView):
 
         super(Nodz, self).mouseReleaseEvent(event)
 
-        if(self.editEnabled and event.button() == QtCore.Qt.MouseButton.RightButton and not event.isAccepted()):
+        if(self.editEnabled and event.button() == QtCore.Qt.RightButton and not event.isAccepted()):
             self.signal_ViewRightClicked.emit()
 
     def keyPressEvent(self, event):
@@ -578,6 +578,15 @@ class Nodz(QtWidgets.QGraphicsView):
         bbh = bby_max - bby_min
         return QtCore.QRectF(QtCore.QRect(bbx_min, bby_min, bbw, bbh))
 
+    def _resetScale(self):
+        """
+        Resets the scale of the graphics view
+
+        """
+        originalTransform = self.transform()
+        self.resetTransform()
+        self.translate(originalTransform.dx(), originalTransform.dy())
+
     def _deleteSelectedNodes(self):
         """
         Delete selected nodes.
@@ -633,7 +642,7 @@ class Nodz(QtWidgets.QGraphicsView):
             addedConnections = list()
             self.signal_UndoRedoConnectNodes.emit(self, removedConnections, addedConnections)
 
-        nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)            
+        nodzInst.signal_EndCompoundInteraction.emit(nodzInst, True)
 
         # Emit signal.
         if len(selected_nodes) > 0:
@@ -1589,7 +1598,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         if (self.usingSquareDisplay):
             aHeight = max(self.baseWidth, aHeight)
 
-        return aHeight            
+        return aHeight
 
     @property
     def pen(self):
@@ -2026,9 +2035,9 @@ class NodeItem(QtWidgets.QGraphicsItem):
         visible_scene_rect = nodzInst.mapToScene(viewport_rect).boundingRect()
         nodeSizeInScreenPixels = self.baseWidth * viewport_rect.width() / visible_scene_rect.width()
 
-        # displaying icon : 
+        # displaying icon :
 
-        attributesDisplayLimitPixOnScreen = config["attributes_display_limit"]     
+        attributesDisplayLimitPixOnScreen = config["attributes_display_limit"]
         titleDisplayLimitPixOnScreen = config["node_title_display_limit"]
         big_icon_display_limit = config["big_icon_display_limit"]
 
@@ -2040,7 +2049,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                                 self.baseWidth,
                                 self.height,
                                 self.radius,
-                                self.radius)            
+                                self.radius)
 
         # Node label.
         painter.setPen(self._textPen)
@@ -2063,7 +2072,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                         textRect.top() - (iconSize + margin) + text_height,
                         iconSize, iconSize)
                 self.icon.paint(painter, iconRect, QtCore.Qt.AlignCenter, QtGui.QIcon.Normal, QtGui.QIcon.On)
-               
+
                 textRect.setRect(textRect.left() + (iconSize/2), textRect.top() - (iconSize - text_height + margin) / 2, textRect.width(), textRect.height())
 
             elif (nodeSizeInScreenPixels < big_icon_display_limit):
@@ -2078,7 +2087,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                         iconSize, iconSize)
 
                 self.scaledIcon.paint(painter, iconRect, QtCore.Qt.AlignCenter, QtGui.QIcon.Normal, QtGui.QIcon.On)
-                
+
         if (nodeSizeInScreenPixels > titleDisplayLimitPixOnScreen):
             painter.drawText(textRect,
                             QtCore.Qt.AlignCenter,
@@ -2115,8 +2124,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
                 painter.drawRect(rect)
 
-                if (nodeSizeInScreenPixels > attributesDisplayLimitPixOnScreen):                
-            
+                if (nodeSizeInScreenPixels > attributesDisplayLimitPixOnScreen):
+
                     painter.setPen(utils._convertDataToColor(config[preset]['text']))
                     painter.setFont(self._attrTextFont)
 
@@ -2132,7 +2141,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                     textRect = QtCore.QRect(rect.left() + self.radius,
                                             rect.top(),
                                             rect.width() - 2*self.radius,
-                                            rect.height())            
+                                            rect.height())
 
                     painter.drawText(textRect, self._attrVAlign, name)
 
@@ -2253,7 +2262,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                         if (nodzInst.currentHoveredNodeForDrop is None or distance2 < lowestDistance2):
                             lowestDistance2 = distance2
                             nodzInst.currentHoveredNodeForDrop = hoveredItem
-                            
+
             self.checkIsWithinSceneRect()
         # else:
         #     super(NodeItem, self).mouseMoveEvent(event) # parent graphic item will move on mouseMoveEvent if not blocked
@@ -2266,7 +2275,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         if (self.scene().parent().editEnabled):
             # Emit node moved signal.
             nodzInst = self.scene().views()[0]
-            if(event.button() == QtCore.Qt.MouseButton.LeftButton):
+            if(event.button() == QtCore.Qt.LeftButton):
 
                 if (self.lastMousePressPos != self.pos()):
                     nodesMovedList = list()
@@ -2319,7 +2328,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                     if nodzInst.currentHoveredNodeForDrop is not None:
                         nodzInst.signal_dropOnNode.emit(nodzInst, nodzInst.currentHoveredNodeForDrop.name) # can get back selection from nodzInst
 
-            elif(event.button() == QtCore.Qt.MouseButton.MiddleButton):
+            elif(event.button() == QtCore.Qt.MiddleButton):
                 if (self.attributeBeingPlugged is not None):
                     self.attributeBeingPlugged.mouseReleaseEvent(event)
                 elif nodzInst.currentHoveredLink is not None:
@@ -2342,7 +2351,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
                     nodzInst.signal_UndoRedoConnectNodes.emit(nodzInst, removedConnections, addedConnections)
 
-            # if(event.button() == QtCore.Qt.MouseButton.RightButton):
+            # if(event.button() == QtCore.Qt.RightButton):
             #     self.scene().parent().signal_NodeRightClicked.emit(self.name)
 
             self.attributeBeingPlugged = None
@@ -2367,7 +2376,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
             for item in nodzInst.scene().items():
                 if isinstance(item, ConnectionItem):
                     item.setZValue(0)
-        
+
         super(NodeItem, self).hoverLeaveEvent(event)
 
 
@@ -2431,7 +2440,7 @@ class SlotItem(QtWidgets.QGraphicsItem):
         # no plug on plug or socket on socket
         thePlugItem = None
         theSocketItem = None
-        
+
         if isinstance(self, PlugItem):
             thePlugItem = self
         if isinstance(slot_item, PlugItem):
@@ -2592,7 +2601,7 @@ class SlotItem(QtWidgets.QGraphicsItem):
                 super(SlotItem, self).mouseReleaseEvent(event)
         else:
             super(SlotItem, self).mouseReleaseEvent(event)
-        
+
         nodzInst.currentHoveredNodeForConnection = None
         nodzInst.currentHoveredNodeForDrop = None
         nodzInst.currentHoveredAttribute = None
