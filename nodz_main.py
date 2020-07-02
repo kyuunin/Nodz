@@ -3,7 +3,7 @@ import re
 import json
 import copy
 
-from glm.Qtpy.Qt import QtGui, QtCore, QtWidgets
+from Qt import QtGui, QtCore, QtWidgets
 import nodz_utils as utils
 import nodz_extra
 
@@ -761,8 +761,8 @@ class Nodz(QtWidgets.QGraphicsView):
         # print("create node {} at creaetNode pos {}".format(name, position))
         # Check for name clashes
         if name in self.scene().nodes.keys():
-            print 'A node with the same name already exists : {0}'.format(name)
-            print 'Node creation aborted !'
+            print('A node with the same name already exists : {0}'.format(name))
+            print('Node creation aborted !')
             return
         else:
             nodeItem = NodeItem(name=name, alternate=alternate, preset=preset,
@@ -795,8 +795,8 @@ class Nodz(QtWidgets.QGraphicsView):
 
         """
         if not node in self.scene().nodes.values():
-            print 'Node object does not exist !'
-            print 'Node deletion aborted !'
+            print('Node object does not exist !')
+            print('Node deletion aborted !')
             return
 
         if node in self.scene().nodes.values():
@@ -842,8 +842,8 @@ class Nodz(QtWidgets.QGraphicsView):
 
         """
         if not node in self.scene().nodes.values():
-            print 'Node object does not exist !'
-            print 'Node edition aborted !'
+            print('Node object does not exist !')
+            print('Node edition aborted !')
             return
 
         oldName = node.name
@@ -851,8 +851,8 @@ class Nodz(QtWidgets.QGraphicsView):
         if newName is not None:
             # Check for name clashes
             if newName in self.scene().nodes.keys():
-                print 'A node with the same name already exists : {0}'.format(newName)
-                print 'Node edition aborted !'
+                print('A node with the same name already exists : {0}'.format(newName))
+                print('Node edition aborted !')
                 return
             else:
                 #oldName = node.name
@@ -920,13 +920,13 @@ class Nodz(QtWidgets.QGraphicsView):
 
         """
         if not node in self.scene().nodes.values():
-            print 'Node object does not exist !'
-            print 'Attribute creation aborted !'
+            print('Node object does not exist !')
+            print('Attribute creation aborted !')
             return
 
         if name in node.attrs:
-            print 'An attribute with the same name already exists : {0}'.format(name)
-            print 'Attribute creation aborted !'
+            print('An attribute with the same name already exists : {0}'.format(name))
+            print('Attribute creation aborted !')
             return
 
         node._createAttribute(name=name, index=index, preset=preset, plug=plug, socket=socket, dataType=dataType, plugMaxConnections=plugMaxConnections, socketMaxConnections=socketMaxConnections)
@@ -946,8 +946,8 @@ class Nodz(QtWidgets.QGraphicsView):
 
         """
         if not node in self.scene().nodes.values():
-            print 'Node object does not exist !'
-            print 'Attribute deletion aborted !'
+            print('Node object does not exist !')
+            print('Attribute deletion aborted !')
             return
 
         node._deleteAttribute(index)
@@ -973,14 +973,14 @@ class Nodz(QtWidgets.QGraphicsView):
 
         """
         if not node in self.scene().nodes.values():
-            print 'Node object does not exist !'
-            print 'Attribute creation aborted !'
+            print('Node object does not exist !')
+            print('Attribute creation aborted !')
             return
 
         if newName is not None:
             if newName in node.attrs:
-                print 'An attribute with the same name already exists : {0}'.format(newName)
-                print 'Attribute edition aborted !'
+                print('An attribute with the same name already exists : {0}'.format(newName))
+                print('Attribute edition aborted !')
                 return
             else:
                 oldName = node.attrs[index]
@@ -1154,7 +1154,7 @@ class Nodz(QtWidgets.QGraphicsView):
                             self.scene().setSceneRect(sceneRect)
 
                         if node_pos.x() < 0 or node_pos.x() > self.scene().width() or node_pos.y()<0 or node_pos.y() > self.scene().height():
-                            print "Warning: {0}: Invalid node position : ({1} ; {2}), frame dimension: ({3} ; {4}).".format(node.name, node_pos.x(), node_pos.y(), self.scene().width(), self.scene().height())
+                            print("Warning: {0}: Invalid node position : ({1} ; {2}), frame dimension: ({3} ; {4}).".format(node.name, node_pos.x(), node_pos.y(), self.scene().width(), self.scene().height()))
 
                         nodesMovedList.append(node.name)
                         fromPosList.append(node.pos())
@@ -1216,8 +1216,8 @@ class Nodz(QtWidgets.QGraphicsView):
         try:
             utils._saveData(filePath=filePath, data=data)
         except:
-            print 'Invalid path : {0}'.format(filePath)
-            print 'Save aborted !'
+            print('Invalid path : {0}'.format(filePath))
+            print('Save aborted !')
             return False
 
         # Emit signal.
@@ -1236,8 +1236,8 @@ class Nodz(QtWidgets.QGraphicsView):
         if os.path.exists(filePath):
             data = utils._loadData(filePath=filePath)
         else:
-            print 'Invalid path : {0}'.format(filePath)
-            print 'Load aborted !'
+            print('Invalid path : {0}'.format(filePath))
+            print('Load aborted !')
             return False
 
         # Apply nodes data.
@@ -1273,7 +1273,7 @@ class Nodz(QtWidgets.QGraphicsView):
                     socketMaxConnections = attrData['socketMaxConnections']
 
                 # un-serialize data type if needed
-                if (isinstance(dataType, unicode) and dataType.find('<') == 0):
+                if (isinstance(dataType, str) and dataType.find('<') == 0):
                     dataType = eval(str(dataType.split('\'')[1]))
 
                 self.createAttribute(node=node,
@@ -1414,6 +1414,7 @@ class NodeScene(QtWidgets.QGraphicsScene):
         self.gridSize = parent.config['grid_size']
 
         map = QtGui.QPixmap(self.gridSize, self.gridSize)
+        print(parent) #TODO
         gridBGColor = utils._convertDataToColor(parent.config['grid_background_color'])
         map.fill(gridBGColor)
         painter = QtGui.QPainter()
@@ -1703,8 +1704,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
         """
         if name in self.attrs:
-            print 'An attribute with the same name already exists on this node : {0}'.format(name)
-            print 'Attribute creation aborted !'
+            print('An attribute with the same name already exists on this node : {0}'.format(name))
+            print('Attribute creation aborted !')
             return
 
         self.attrPreset = preset
@@ -2492,7 +2493,7 @@ class SlotItem(QtWidgets.QGraphicsItem):
                 nextNodesToProcess[:] = []
                 # del nodesToProcess[:]
             if not validConnection:
-                print "This Connection would make a loop, this is forbidden"
+                print("This Connection would make a loop, this is forbidden")
                 return
 
         #otherwise, all fine.
