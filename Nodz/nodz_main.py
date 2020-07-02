@@ -4,10 +4,10 @@ import json
 import copy
 
 from Qt import QtGui, QtCore, QtWidgets
-import nodz_utils as utils
-import nodz_extra
+from . import nodz_utils as utils
+from . import nodz_extra
 
-defaultConfigPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'default_config.json')
+defaultConfigPath = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'default_config.json')
 
 class ConnectionInfo():
      def __init__(self, connectionItem):

@@ -1,5 +1,5 @@
 from Qt import QtGui, QtCore, QtWidgets
-import nodz_main
+from . import nodz_main
 
 class QtPopupLineEditWidget(QtWidgets.QLineEdit):
 

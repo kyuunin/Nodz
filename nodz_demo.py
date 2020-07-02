@@ -1,5 +1,5 @@
 from Qt import QtCore, QtWidgets
-import nodz_main
+from Nodz import nodz_main
 
 try:
     app = QtWidgets.QApplication([])
